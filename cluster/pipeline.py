@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import re
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -77,14 +78,21 @@ def classify_intent(text: str):
     conf = min(0.9, 0.5 + 0.1*len(scores))
     return label, conf
 
-def run_pipeline(csv_in, csv_out):
+def run_pipeline(csv_in, csv_out, min_sim=0.8, config_path=None):
+    if config_path:
+        with open(config_path) as f:
+            cfg = json.load(f)
+        BRANDS.update(cfg.get("BRANDS", {}))
+        MODIFIERS.extend([m for m in cfg.get("MODIFIERS", []) if m not in MODIFIERS])
+        REGIONS.extend([r for r in cfg.get("REGIONS", []) if r not in REGIONS])
+
     df = pd.read_csv(csv_in)
     if "keyword" not in df.columns:
         raise ValueError("Input CSV must have a 'keyword' column.")
     df["keyword_norm"] = df["keyword"].apply(normalize_kw)
     tags = df["keyword_norm"].apply(extract_tags)
     df[["brands","regions","modifiers"]] = pd.DataFrame(tags.tolist(), index=df.index)
-    cl = cluster_keywords(df["keyword_norm"].tolist(), min_sim=0.8)
+    cl = cluster_keywords(df["keyword_norm"].tolist(), min_sim=min_sim)
     df = df.merge(cl, on="keyword_norm", how="left")
     intents = df["keyword_norm"].apply(classify_intent)
     df["intent"] = intents.apply(lambda x: x[0])
@@ -92,8 +100,11 @@ def run_pipeline(csv_in, csv_out):
     df.to_csv(csv_out, index=False)
 
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) != 3:
-        print("Usage: python -m cluster.pipeline <keywords_in.csv> <keywords_tagged.csv>")
-        raise SystemExit(2)
-    run_pipeline(sys.argv[1], sys.argv[2])
+    import argparse
+    parser = argparse.ArgumentParser(description="Keyword clustering and intent classification")
+    parser.add_argument("csv_in")
+    parser.add_argument("csv_out")
+    parser.add_argument("--min-sim", type=float, default=0.8)
+    parser.add_argument("--config", dest="config_path")
+    args = parser.parse_args()
+    run_pipeline(args.csv_in, args.csv_out, min_sim=args.min_sim, config_path=args.config_path)
