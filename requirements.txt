@@ -2,3 +2,4 @@ pandas
 rapidfuzz
 scikit-learn
 numpy
+streamlit
