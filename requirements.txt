@@ -3,3 +3,4 @@ rapidfuzz
 scikit-learn
 numpy
 streamlit
+hdbscan
