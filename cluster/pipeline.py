@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 import pandas as pd
 import re
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -78,7 +79,7 @@ def classify_intent(text: str):
     conf = min(0.9, 0.5 + 0.1*len(scores))
     return label, conf
 
-def run_pipeline(csv_in, csv_out, min_sim=0.8, config_path=None):
+def run_pipeline(csv_in, csv_out, min_sim=0.8, config_path=None, router_path=None):
     if config_path:
         with open(config_path) as f:
             cfg = json.load(f)
@@ -94,6 +95,30 @@ def run_pipeline(csv_in, csv_out, min_sim=0.8, config_path=None):
     df[["brands","regions","modifiers"]] = pd.DataFrame(tags.tolist(), index=df.index)
     cl = cluster_keywords(df["keyword_norm"].tolist(), min_sim=min_sim)
     df = df.merge(cl, on="keyword_norm", how="left")
+
+    router = None
+    router_candidate = None
+    if router_path:
+        router_candidate = Path(router_path)
+        if not router_candidate.exists():
+            raise FileNotFoundError(f"Router artifact not found at {router_candidate}")
+    else:
+        default_router = Path(__file__).resolve().with_name("router.joblib")
+        if default_router.exists():
+            router_candidate = default_router
+    if router_candidate:
+        from .router import VerticalRouter
+
+        router = VerticalRouter.load(router_candidate)
+
+    if router:
+        labels, confidences = router.predict_with_confidence(df["keyword_norm"].tolist())
+        df["vertical"] = labels
+        df["vertical_conf"] = confidences
+    else:
+        df["vertical"] = ["general"] * len(df)
+        df["vertical_conf"] = [0.0] * len(df)
+
     intents = df["keyword_norm"].apply(classify_intent)
     df["intent"] = intents.apply(lambda x: x[0])
     df["intent_conf"] = intents.apply(lambda x: x[1])
@@ -106,5 +131,12 @@ if __name__ == "__main__":
     parser.add_argument("csv_out")
     parser.add_argument("--min-sim", type=float, default=0.8)
     parser.add_argument("--config", dest="config_path")
+    parser.add_argument("--router", dest="router_path")
     args = parser.parse_args()
-    run_pipeline(args.csv_in, args.csv_out, min_sim=args.min_sim, config_path=args.config_path)
+    run_pipeline(
+        args.csv_in,
+        args.csv_out,
+        min_sim=args.min_sim,
+        config_path=args.config_path,
+        router_path=args.router_path,
+    )
