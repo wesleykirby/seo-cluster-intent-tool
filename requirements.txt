@@ -3,3 +3,9 @@ rapidfuzz
 scikit-learn
 numpy
 streamlit
+joblib
+numpy
+pandas
+rapidfuzz
+scikit-learn
+streamlit
