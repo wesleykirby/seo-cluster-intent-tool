@@ -3,3 +3,6 @@ rapidfuzz
 scikit-learn
 numpy
 streamlit
+sentence-transformers
+torch
+hdbscan

@@ -1,8 +1,17 @@
+from __future__ import annotations
+
 import json
-import pandas as pd
+import warnings
 import re
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+
+import numpy as np
+import pandas as pd
+import hdbscan
+
+try:
+    from .embedding import encode_texts
+except ImportError:  # pragma: no cover - fallback for direct execution
+    from embedding import encode_texts  # type: ignore
 
 # --- domain dictionaries you can extend ---
 BRANDS = {
@@ -31,32 +40,87 @@ def extract_tags(s: str):
     modifiers = [m for m in MODIFIERS if re.search(rf"\b{re.escape(m)}\b", s)]
     return brands, regions, modifiers
 
-def cluster_keywords(keywords: list, min_sim=0.8) -> pd.DataFrame:
-    vec = TfidfVectorizer(analyzer="char", ngram_range=(3,5))
-    X = vec.fit_transform(keywords)
-    sim = cosine_similarity(X)
-    n = len(keywords)
-    visited, clusters = set(), []
-    for i in range(n):
-        if i in visited: continue
-        group = [i]; visited.add(i)
-        for j in range(i+1, n):
-            if j in visited: continue
-            if sim[i, j] >= min_sim:
-                group.append(j); visited.add(j)
-        clusters.append(group)
+def cluster_keywords(
+    keywords: list[str],
+    *,
+    min_cluster_size: int = 3,
+    min_samples: int | None = None,
+    cluster_selection_epsilon: float = 0.0,
+    model_path: str | None = None,
+) -> pd.DataFrame:
+    """Cluster keywords using embeddings and HDBSCAN.
+
+    Parameters
+    ----------
+    keywords:
+        The normalized keywords that should be clustered.
+    min_cluster_size:
+        Minimum size HDBSCAN should consider a cluster.  Defaults to 3 which
+        keeps noise under control without forcing overly large clusters.
+    min_samples:
+        Optional density parameter forwarded to :class:`hdbscan.HDBSCAN`.
+    cluster_selection_epsilon:
+        Softens the cluster boundaries when greater than zero.  The default of 0
+        mirrors the deterministic behaviour used previously.
+    model_path:
+        Optional override for the encoder path.
+    """
+
+    if not keywords:
+        return pd.DataFrame(
+            columns=["cluster_id", "keyword_norm", "centroid", "avg_sim", "cluster_confidence"]
+        )
+
+    embeddings = encode_texts(keywords, model_path=model_path)
+    clusterer = hdbscan.HDBSCAN(
+        metric="euclidean",
+        min_cluster_size=max(2, min_cluster_size),
+        min_samples=min_samples,
+        cluster_selection_epsilon=cluster_selection_epsilon,
+    )
+    labels = clusterer.fit_predict(embeddings)
+
+    clusters: dict[int, list[int]] = {}
+    for idx, label in enumerate(labels):
+        clusters.setdefault(label, []).append(idx)
 
     rows = []
-    for cid, idxs in enumerate(clusters):
-        centroid_idx = max(idxs, key=lambda i: float(sum(sim[i][idxs]) / len(idxs)))
+    next_cluster_id = 0
+
+    def _emit_cluster(idxs: list[int], cluster_id: int) -> None:
+        sub_emb = embeddings[idxs]
+        sims = np.matmul(sub_emb, sub_emb.T)
+        mean_sims = sims.mean(axis=1)
+        centroid_idx = idxs[int(np.argmax(mean_sims))]
         centroid = keywords[centroid_idx]
-        for i in idxs:
-            rows.append({
-                "cluster_id": cid,
-                "keyword_norm": keywords[i],
-                "centroid": centroid,
-                "avg_sim": float(sum(sim[i][idxs]) / len(idxs)),
-            })
+        for pos, idx in enumerate(idxs):
+            rows.append(
+                {
+                    "cluster_id": cluster_id,
+                    "keyword_norm": keywords[idx],
+                    "centroid": centroid,
+                    "avg_sim": float(mean_sims[pos]),
+                    "cluster_confidence": float(clusterer.probabilities_[idx]),
+                }
+            )
+
+    for label in sorted(k for k in clusters if k != -1):
+        idxs = clusters[label]
+        _emit_cluster(idxs, next_cluster_id)
+        next_cluster_id += 1
+
+    for idx in clusters.get(-1, []):
+        rows.append(
+            {
+                "cluster_id": next_cluster_id,
+                "keyword_norm": keywords[idx],
+                "centroid": keywords[idx],
+                "avg_sim": 1.0,
+                "cluster_confidence": float(clusterer.probabilities_[idx]),
+            }
+        )
+        next_cluster_id += 1
+
     return pd.DataFrame(rows)
 
 INTENT_RULES = [
@@ -78,7 +142,16 @@ def classify_intent(text: str):
     conf = min(0.9, 0.5 + 0.1*len(scores))
     return label, conf
 
-def run_pipeline(csv_in, csv_out, min_sim=0.8, config_path=None):
+def run_pipeline(
+    csv_in,
+    csv_out,
+    min_cluster_size=3,
+    min_samples=None,
+    cluster_selection_epsilon=0.0,
+    config_path=None,
+    encoder_path=None,
+    min_sim=None,
+):
     if config_path:
         with open(config_path) as f:
             cfg = json.load(f)
@@ -92,7 +165,22 @@ def run_pipeline(csv_in, csv_out, min_sim=0.8, config_path=None):
     df["keyword_norm"] = df["keyword"].apply(normalize_kw)
     tags = df["keyword_norm"].apply(extract_tags)
     df[["brands","regions","modifiers"]] = pd.DataFrame(tags.tolist(), index=df.index)
-    cl = cluster_keywords(df["keyword_norm"].tolist(), min_sim=min_sim)
+    if min_sim is not None:
+        warnings.warn(
+            "'min_sim' is deprecated; use 'min_cluster_size' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        approx_size = max(2, int(round(1.0 / max(1.0 - min_sim, 1e-3))))
+        min_cluster_size = max(min_cluster_size, approx_size)
+
+    cl = cluster_keywords(
+        df["keyword_norm"].tolist(),
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+        cluster_selection_epsilon=cluster_selection_epsilon,
+        model_path=encoder_path,
+    )
     df = df.merge(cl, on="keyword_norm", how="left")
     intents = df["keyword_norm"].apply(classify_intent)
     df["intent"] = intents.apply(lambda x: x[0])
@@ -104,7 +192,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Keyword clustering and intent classification")
     parser.add_argument("csv_in")
     parser.add_argument("csv_out")
-    parser.add_argument("--min-sim", type=float, default=0.8)
+    parser.add_argument("--min-cluster-size", type=int, default=3)
+    parser.add_argument("--min-samples", type=int, default=None)
+    parser.add_argument("--cluster-epsilon", type=float, default=0.0)
+    parser.add_argument("--encoder-path")
+    parser.add_argument("--min-sim", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--config", dest="config_path")
     args = parser.parse_args()
-    run_pipeline(args.csv_in, args.csv_out, min_sim=args.min_sim, config_path=args.config_path)
+    run_pipeline(
+        args.csv_in,
+        args.csv_out,
+        min_cluster_size=args.min_cluster_size,
+        min_samples=args.min_samples,
+        cluster_selection_epsilon=args.cluster_epsilon,
+        config_path=args.config_path,
+        encoder_path=args.encoder_path,
+        min_sim=args.min_sim,
+    )
