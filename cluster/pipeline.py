@@ -4,6 +4,11 @@ import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+try:
+    from cluster.serp_calibrator import load_default_calibrator
+except ImportError:  # pragma: no cover - allows running as a standalone script
+    from serp_calibrator import load_default_calibrator  # type: ignore
+
 # --- domain dictionaries you can extend ---
 BRANDS = {
     "betway": "betway", "sportybet": "sportybet", "msport": "msport",
@@ -97,6 +102,14 @@ def run_pipeline(csv_in, csv_out, min_sim=0.8, config_path=None):
     intents = df["keyword_norm"].apply(classify_intent)
     df["intent"] = intents.apply(lambda x: x[0])
     df["intent_conf"] = intents.apply(lambda x: x[1])
+
+    brand_aliases = set(BRANDS.keys()) | set(BRANDS.values())
+    calibrator = load_default_calibrator(brands=brand_aliases)
+    serp_probs = calibrator.predict_proba(df)
+    df["model_prob"] = df["intent_conf"]
+    df["serp_calibrator_prob"] = serp_probs
+    df["final_prob"] = 0.7 * df["model_prob"] + 0.3 * df["serp_calibrator_prob"]
+
     df.to_csv(csv_out, index=False)
 
 if __name__ == "__main__":
