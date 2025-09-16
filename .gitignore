@@ -1,6 +1,4 @@
-.venv/
 __pycache__/
 *.pyc
-.env
-.DS_Store
-keywords_tagged.csv
+data/label_queue.csv
+data/new_labels*.csv
