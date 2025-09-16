@@ -1,0 +1,35 @@
+{
+  "BRANDS": {
+    "betway": "betway",
+    "sportybet": "sportybet",
+    "msport": "msport",
+    "betpawa": "betpawa",
+    "betika": "betika"
+  },
+  "MODIFIERS": [
+    "app",
+    "apk",
+    "login",
+    "register",
+    "bonus",
+    "odds",
+    "fixtures",
+    "live",
+    "tips",
+    "predictions",
+    "jackpot",
+    "casino",
+    "slots",
+    "live dealer",
+    "cashout",
+    "bet builder"
+  ],
+  "REGIONS": [
+    "ghana",
+    "south africa",
+    "botswana",
+    "zambia",
+    "tanzania",
+    "mozambique"
+  ]
+}
