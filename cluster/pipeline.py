@@ -10,7 +10,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from .models.intent import load_intent_model
-from .text_utils import apply_domain_config, extract_tags, normalize_kw
+from .text_utils import apply_domain_config, extract_tags, normalize_kw, detect_industry_vertical
 
 
 def cluster_keywords(keywords: list[str], min_sim: float = 0.8) -> pd.DataFrame:
@@ -66,8 +66,14 @@ def run_pipeline(
     df = pd.read_csv(csv_in)
     if "keyword" not in df.columns:
         raise ValueError("Input CSV must have a 'keyword' column.")
+    
+    # Auto-detect vertical if not provided
     if "vertical" not in df.columns:
-        raise ValueError("Input CSV must have a 'vertical' column for intent models.")
+        detected_vertical = detect_industry_vertical(df["keyword"].tolist())
+        df["vertical"] = detected_vertical
+        print(f"Auto-detected industry vertical: {detected_vertical}")
+    else:
+        df["vertical"] = df["vertical"].fillna("general").astype(str)
 
     df["keyword_norm"] = df["keyword"].astype(str).apply(normalize_kw)
     tags = df["keyword_norm"].apply(extract_tags)
@@ -76,16 +82,26 @@ def run_pipeline(
     clustering = cluster_keywords(df["keyword_norm"].tolist(), min_sim=min_sim)
     df = df.merge(clustering, on="keyword_norm", how="left", suffixes=("", "_cluster"))
 
-    df["vertical"] = df["vertical"].fillna("default").astype(str)
-
     intents = pd.Series(index=df.index, dtype="object")
     probs = pd.Series(index=df.index, dtype=float)
+    
+    # Import rule-based classification as fallback
+    from .text_utils import classify_with_rules
+    
     for vertical, idxs in df.groupby("vertical").groups.items():
-        model = load_intent_model(vertical, models_dir=models_dir)
-        subset = df.loc[idxs]
-        labels, scores = model.predict_with_prob(subset)
-        intents.loc[idxs] = labels
-        probs.loc[idxs] = scores
+        try:
+            model = load_intent_model(vertical, models_dir=models_dir)
+            subset = df.loc[idxs]
+            labels, scores = model.predict_with_prob(subset)
+            intents.loc[idxs] = labels
+            probs.loc[idxs] = scores
+        except (FileNotFoundError, ValueError, ImportError):
+            # Fallback to rule-based classification if model doesn't exist
+            print(f"Model for vertical '{vertical}' not found, using rule-based classification")
+            subset = df.loc[idxs]
+            rule_results = subset["keyword_norm"].apply(lambda x: classify_with_rules(x))
+            intents.loc[idxs] = [result[0] for result in rule_results]
+            probs.loc[idxs] = [result[1] for result in rule_results]
 
     df["intent"] = intents
     df["intent_prob"] = probs

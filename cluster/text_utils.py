@@ -40,6 +40,31 @@ REGIONS: List[str] = [
     "mozambique",
 ]
 
+# Industry detection patterns
+INDUSTRY_PATTERNS: Dict[str, List[str]] = {
+    "betting": ["bet", "odds", "casino", "jackpot", "bonus", "register", "login", "app", "apk", 
+                "sportybet", "betway", "msport", "betpawa", "betika", "gambling", "wager", 
+                "predictions", "tips", "live betting", "cashout", "slots", "poker"],
+    "ecommerce": ["buy", "shop", "cart", "checkout", "product", "price", "discount", "sale", 
+                  "store", "marketplace", "delivery", "shipping", "order", "payment"],
+    "finance": ["bank", "loan", "credit", "investment", "insurance", "mortgage", "savings", 
+                "financial", "money", "transfer", "account", "payment", "trading"],
+    "health": ["doctor", "hospital", "medicine", "treatment", "health", "medical", "clinic", 
+               "pharmacy", "diagnosis", "symptoms", "wellness", "fitness"],
+    "education": ["course", "school", "university", "learn", "education", "training", "study", 
+                  "online course", "degree", "certification", "tutorial"],
+    "technology": ["software", "app", "tech", "digital", "computer", "mobile", "web", "cloud", 
+                   "ai", "programming", "development", "service"],
+    "travel": ["hotel", "flight", "travel", "booking", "vacation", "trip", "tourism", "resort", 
+               "destination", "airline", "accommodation"],
+    "real_estate": ["house", "property", "rent", "buy", "real estate", "apartment", "home", 
+                    "mortgage", "land", "commercial property"],
+    "automotive": ["car", "auto", "vehicle", "driving", "insurance", "repair", "parts", "dealer", 
+                   "motorcycle", "truck", "maintenance"],
+    "food": ["restaurant", "food", "recipe", "cooking", "delivery", "menu", "dining", "cuisine", 
+             "takeaway", "catering"]
+}
+
 INTENT_RULES: List[Tuple[str, str]] = [
     ("informational", r"\b(how|what|why|guide|meaning|rules|strategy|tips|predictions)\b"),
     ("transactional", r"\b(register|sign up|login|download|app|apk|deposit|withdraw)\b"),
@@ -123,6 +148,30 @@ def classify_with_rules(
     )
     confidence = min(0.95, 0.5 + 0.1 * len(scores))
     return label, confidence
+
+
+def detect_industry_vertical(keywords: List[str]) -> str:
+    """Automatically detect the industry vertical from a list of keywords."""
+    # Normalize all keywords for analysis
+    normalized_keywords = [normalize_kw(kw) for kw in keywords]
+    combined_text = " ".join(normalized_keywords).lower()
+    
+    # Score each industry based on keyword matches
+    industry_scores: Dict[str, int] = {}
+    
+    for industry, patterns in INDUSTRY_PATTERNS.items():
+        score = 0
+        for pattern in patterns:
+            # Count occurrences of each pattern in the combined text
+            pattern_matches = len(re.findall(rf"\b{re.escape(pattern)}\b", combined_text))
+            score += pattern_matches
+        industry_scores[industry] = score
+    
+    # Return the industry with the highest score, default to 'general' if no clear match
+    if not industry_scores or max(industry_scores.values()) == 0:
+        return "general"
+    
+    return max(industry_scores, key=industry_scores.get)
 
 
 def ensure_keyword_norm(series) -> List[str]:
