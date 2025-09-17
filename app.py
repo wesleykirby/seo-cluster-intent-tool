@@ -30,9 +30,9 @@ def process_file(uploaded_file, min_sim, config_path):
     df = pd.read_csv(output_path)
     return df, output_path
 
-st.title("SEO Cluster & Intent Tool")
+st.title("🎯 Smart SEO Keyword Analyzer")
 
-st.info("💡 Smart CSV Processing: Just upload a CSV with a 'keyword' column - the tool will automatically detect the industry vertical and process everything!")
+st.info("🚀 **New Semantic Analysis!** Upload a CSV with just a 'keyword' column and get clean Main/Sub/Modifier structure with ML-powered pattern discovery!")
 
 with st.form("cluster_form"):
     uploaded = st.file_uploader("Upload keyword CSV", type=["csv"], help="Required: CSV with 'keyword' column. Industry vertical will be auto-detected.")
@@ -48,101 +48,105 @@ with st.form("cluster_form"):
     )
     submitted = st.form_submit_button("Process")
 
-# Industry vertical detection and override
+# Preview uploaded file
 if uploaded is not None:
-    # Preview the uploaded file to show detection
     temp_df = pd.read_csv(uploaded)
     if "keyword" in temp_df.columns:
-        detected_vertical = detect_industry_vertical(temp_df["keyword"].tolist())
-        st.success(f"🎯 Auto-detected industry: **{detected_vertical}**")
+        st.success(f"📊 Ready to analyze **{len(temp_df)} keywords** with semantic ML!")
         
-        # Allow manual override
-        override_vertical = st.selectbox(
-            "Override industry vertical (optional):",
-            options=["Use auto-detected"] + ["betting", "ecommerce", "finance", "health", "education", "technology", "travel", "real_estate", "automotive", "food", "general"],
-            key="vertical_override"
-        )
+        # Show sample keywords
+        st.write("**Sample keywords from your file:**")
+        sample_keywords = temp_df['keyword'].head(10).tolist()
+        for i, kw in enumerate(sample_keywords, 1):
+            st.write(f"{i}. {kw}")
+        if len(temp_df) > 10:
+            st.write(f"... and {len(temp_df) - 10} more")
     else:
-        st.error("CSV must contain a 'keyword' column")
-        override_vertical = "general"
+        st.error("❌ CSV must contain a 'keyword' column")
 
 if submitted:
     if not uploaded:
         st.warning("Please upload a CSV file before processing.")
     else:
-        # Apply vertical override if selected
-        if override_vertical != "Use auto-detected":
-            # Temporarily modify the uploaded file to include the vertical column
-            temp_df = pd.read_csv(uploaded)
-            temp_df["vertical"] = override_vertical
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
-                temp_df.to_csv(temp_file.name, index=False)
-                uploaded = temp_file.name
-        
-        with st.spinner("Running pipeline..."):
+        with st.spinner("🧠 Running semantic analysis with ML pattern discovery..."):
             df, out_path = process_file(uploaded, min_sim, config_path)
-        st.success("Processing complete. Preview below:")
         
-        # Show detected/overridden vertical in results
-        if "vertical" in df.columns:
-            vertical_used = df["vertical"].iloc[0]
-            st.info(f"📊 Industry vertical used: **{vertical_used}**")
+        st.success("🎉 **Analysis Complete!** Your keywords have been organized into clean semantic structure.")
         
-        st.dataframe(df.head())
-        low_conf = filter_low_confidence(df, threshold=active_threshold)
-        update_label_queue(candidates=low_conf)
-        if low_conf.empty:
-            st.info("No low-confidence keywords were added to the label queue.")
-        else:
-            st.info(
-                f"Queued {len(low_conf)} keywords with intent confidence below "
-                f"{active_threshold:.2f}."
-            )
-            st.dataframe(
-                low_conf[[c for c in ["keyword", "intent", "intent_conf"] if c in low_conf.columns]],
-                use_container_width=True,
-            )
+        # Show results summary
+        col1, col2, col3, col4 = st.columns(4)
+        
+        if 'Main' in df.columns:
+            with col1:
+                main_topics = df['Main'].value_counts()
+                st.metric("Main Topics", len(main_topics))
+                st.write("**Top topics:**")
+                for topic, count in main_topics.head(3).items():
+                    st.write(f"• {topic}: {count}")
+        
+        if 'Sub' in df.columns:
+            with col2:
+                sub_topics = df['Sub'].value_counts()
+                st.metric("Sub Topics", len(sub_topics))
+                st.write("**Top brands/categories:**")
+                for topic, count in sub_topics.head(3).items():
+                    st.write(f"• {topic}: {count}")
+        
+        if 'Mod' in df.columns:
+            with col3:
+                modifiers = df['Mod'].value_counts()
+                st.metric("Intent Modifiers", len(modifiers))
+                st.write("**Top intents:**")
+                for mod, count in modifiers.head(3).items():
+                    st.write(f"• {mod}: {count}")
+        
+        with col4:
+            st.metric("Total Keywords", len(df))
+            st.write("**Column structure:**")
+            st.write("✅ Main Topic")
+            st.write("✅ Sub Topic") 
+            st.write("✅ Modifier")
+            st.write("✅ Keyword")
+        
+        st.divider()
+        
+        # Show preview of results
+        st.subheader("📋 Results Preview")
+        st.dataframe(df.head(20), use_container_width=True)
+        
+        if len(df) > 20:
+            st.info(f"Showing first 20 rows of {len(df)} total keywords. Download the full CSV below.")
+        
+        # Download button
         with open(out_path, "rb") as f:
             st.download_button(
-                "Download full results",
+                "📥 Download Complete Analysis (CSV)",
                 data=f.read(),
-                file_name="keywords_tagged.csv",
+                file_name="semantic_keyword_analysis.csv",
                 mime="text/csv",
+                type="primary",
+                use_container_width=True
             )
 
 st.divider()
-st.header("Active Learning Label Queue")
-st.caption(f"Queue stored at `{DEFAULT_QUEUE_PATH}`")
-queue_df = load_label_queue()
-if queue_df.empty:
-    st.info("No low-confidence keywords are awaiting review.")
-else:
-    unlabeled_mask = queue_df["human_intent"].astype(str).str.strip() == ""
-    st.write(
-        f"{int(unlabeled_mask.sum())} of {len(queue_df)} keywords still need a human label."
-    )
-    edited_queue = st.data_editor(
-        queue_df,
-        num_rows="dynamic",
-        key="label_queue_editor",
-        use_container_width=True,
-    )
-    col_save, col_download = st.columns(2)
-    with col_save:
-        if st.button("Save queue updates", key="save_queue_button"):
-            save_label_queue(edited_queue)
-            st.success("Label queue saved.")
-            queue_df = edited_queue
-    labeled_rows = edited_queue[
-        edited_queue["human_intent"].astype(str).str.strip() != ""
-    ]
-    csv_bytes = labeled_rows.to_csv(index=False).encode("utf-8") if not labeled_rows.empty else b""
-    with col_download:
-        st.download_button(
-            "Download labeled rows",
-            data=csv_bytes,
-            file_name="new_labels.csv",
-            mime="text/csv",
-            disabled=labeled_rows.empty,
-            help="Exports rows that already have a human-provided intent label.",
-        )
+
+# Information section
+st.subheader("🧠 How This Analysis Works")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.write("**🔍 Semantic Pattern Discovery:**")
+    st.write("• Automatically discovers brands from your data")
+    st.write("• Identifies intent modifiers (Login, App, Registration, etc.)")
+    st.write("• Groups keywords by semantic meaning, not just similarity")
+    st.write("• Adapts to different markets and regions")
+
+with col2:
+    st.write("**📊 Output Structure:**")
+    st.write("• **Main**: Core topic (Branded, Betting, Sports, Casino)")
+    st.write("• **Sub**: Specific brand or category")
+    st.write("• **Mod**: Intent modifier (the key to user intent!)")
+    st.write("• **Keyword**: Your original search term")
+
+st.info("💡 **Pro Tip**: The 'Modifier' column reveals the true user intent - Login (access), App (mobile), Ghana (geo-targeting), etc. This is perfect for SEO content strategy!")

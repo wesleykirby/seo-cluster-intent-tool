@@ -11,6 +11,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from .models.intent import load_intent_model
 from .text_utils import apply_domain_config, extract_tags, normalize_kw, detect_industry_vertical
+from .semantic_analyzer import SemanticKeywordAnalyzer
 
 
 def cluster_keywords(keywords: list[str], min_sim: float = 0.8) -> pd.DataFrame:
@@ -58,6 +59,37 @@ def run_pipeline(
     config_path: Optional[str | Path] = None,
     models_dir: Optional[str | Path] = None,
 ) -> None:
+    """New semantic analysis pipeline that outputs Main/Sub/Modifier/Keyword structure"""
+    
+    df = pd.read_csv(csv_in)
+    if "keyword" not in df.columns:
+        raise ValueError("Input CSV must have a 'keyword' column.")
+    
+    print(f"🔍 Analyzing {len(df)} keywords with semantic ML...")
+    
+    # Use the new semantic analyzer
+    analyzer = SemanticKeywordAnalyzer()
+    results_df = analyzer.analyze_keywords(df["keyword"].tolist())
+    
+    print(f"✅ Analysis complete! Generated 4-column structure:")
+    print(f"   - Discovered {len(analyzer.brand_patterns)} brands automatically")
+    print(f"   - Classified into semantic topics and modifiers")
+    
+    # Save the clean 4-column output
+    results_df.to_csv(csv_out, index=False)
+    
+    print(f"💾 Results saved to {csv_out}")
+
+
+# Legacy function for backward compatibility
+def run_pipeline_legacy(
+    csv_in: str | Path,
+    csv_out: str | Path,
+    min_sim: float = 0.8,
+    config_path: Optional[str | Path] = None,
+    models_dir: Optional[str | Path] = None,
+) -> None:
+    """Legacy pipeline with old clustering approach - kept for reference"""
     if config_path:
         with open(config_path) as fh:
             cfg = json.load(fh)
