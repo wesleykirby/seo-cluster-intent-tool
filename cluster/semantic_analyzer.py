@@ -1,6 +1,6 @@
 """
 Smart semantic keyword analysis for generating Main/Sub/Modifier/Keyword structure.
-Uses ML pattern recognition to discover intent and topic patterns.
+Uses ML pattern recognition and fuzzy matching to discover intent patterns even from misspelled keywords.
 """
 import re
 from typing import Dict, List, Tuple, Set
@@ -9,10 +9,17 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+from .fuzzy_intent import FuzzyIntentRecognizer
 
 class SemanticKeywordAnalyzer:
     def __init__(self):
-        # Intent modifiers - these reveal user intent
+        # Initialize fuzzy intent recognizer for handling misspellings
+        self.fuzzy_recognizer = FuzzyIntentRecognizer()
+        
+        # Brand patterns - will be discovered from data  
+        self.brand_patterns = set()
+        
+        # Legacy pattern definitions (kept for fallback compatibility)
         self.intent_patterns = {
             'login': ['login', 'log in', 'signin', 'sign in', 'access'],
             'app': ['app', 'download', 'apk', 'mobile', 'application'],
@@ -28,9 +35,6 @@ class SemanticKeywordAnalyzer:
             'live': ['live', 'livescore', 'results'],
             'games': ['games', 'casino', 'slots']
         }
-        
-        # Brand patterns - will be discovered from data
-        self.brand_patterns = set()
         
         # Main topic categories
         self.main_topics = {
@@ -221,24 +225,38 @@ class SemanticKeywordAnalyzer:
             return {0: keywords}
     
     def analyze_keywords(self, keywords: List[str]) -> pd.DataFrame:
-        """Main analysis function - converts keywords to 4-column structure"""
+        """
+        Main analysis function - converts keywords to 4-column structure
+        Now with fuzzy intent recognition for handling misspellings!
+        """
         
-        # Step 1: Discover brands from the data
+        # Step 1: Discover brands from the data (traditional method)
         self.discover_brands(keywords)
         
-        # Step 2: Analyze each keyword
+        # Step 2: Use fuzzy intent recognition for each keyword
         results = []
         
         for keyword in keywords:
-            main_topic = self.extract_main_topic(keyword)
-            sub_topic = self.extract_sub_topic(keyword, main_topic)
-            modifier = self.extract_modifier(keyword)
+            # Get fuzzy intent analysis (understands misspellings)
+            intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
+            
+            # Extract the components while preserving original keyword
+            main_topic = intent_analysis['main']
+            sub_topic = intent_analysis['sub']
+            modifier = intent_analysis['modifier']
+            
+            # Add confidence information as metadata (could be useful for debugging)
+            confidence_data = {
+                'main_conf': intent_analysis['main_confidence'],
+                'mod_conf': intent_analysis['modifier_confidence']
+            }
             
             results.append({
-                'Main': main_topic.title(),
+                'Main': main_topic,  # Already properly formatted from fuzzy recognizer
                 'Sub': sub_topic,
-                'Mod': modifier.title(),
-                'Keyword': keyword
+                'Mod': modifier,
+                'Keyword': keyword,  # Original keyword preserved!
+                **confidence_data  # Include confidence scores for potential debugging
             })
         
         df = pd.DataFrame(results)
@@ -261,8 +279,8 @@ class SemanticKeywordAnalyzer:
         
         df['Cluster_ID'] = df['Keyword'].map(cluster_map)
         
-        # Clean up temporary column
-        df = df.drop('cluster_group', axis=1)
+        # Clean up temporary columns
+        df = df.drop(['cluster_group', 'main_conf', 'mod_conf'], axis=1)
         
         return df[['Main', 'Sub', 'Mod', 'Keyword']]  # Clean 4-column output
 
