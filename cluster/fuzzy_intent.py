@@ -36,12 +36,41 @@ class FuzzyIntentRecognizer:
             'nairabet': 'nairabet',
             '1xbet': '1xbet',
             'melbet': 'melbet',
+            'hollywoodbets': 'hollywoodbets',
+            'supabets': 'supabets',
+            'playabets': 'playabets',
             
             # Common variations and abbreviations
             'sporty': 'sportybet',
             'ms': 'msport',
             'bet way': 'betway',
             'sport bet': 'sportybet',
+            'hollywood': 'hollywoodbets',
+            'supa': 'supabets',
+            'playa': 'playabets',
+            'batway': 'betway',
+            'betwey': 'betway',
+            'berway': 'betway',
+            'beyway': 'betway',
+            'betwa': 'betway',
+            'betwat': 'betway',
+            'betwy': 'betway',
+            'bitway': 'betway',
+            'bedway': 'betway',
+            'bétway': 'betway',
+            'betŵay': 'betway',
+            'bètway': 'betway',
+            'betaway': 'betway',
+            'betwsy': 'betway',
+            'betwau': 'betway',
+            'bettway': 'betway',
+            'bertway': 'betway',
+            'betwqy': 'betway',
+            'betwày': 'betway',
+            'brtway': 'betway',
+            'beatway': 'betway',
+            'betawy': 'betway',
+            'beteway': 'betway',
         }
         return brands
     
@@ -56,6 +85,7 @@ class FuzzyIntentRecognizer:
             'log': 'Login',
             'logn': 'Login',
             'loging': 'Login',
+            'sign in': 'Login',
             
             # App variations  
             'app': 'App',
@@ -65,6 +95,7 @@ class FuzzyIntentRecognizer:
             'mobile': 'App',
             'downlod': 'App',
             'downlaod': 'App',
+            'install': 'App',
             
             # Registration variations
             'register': 'Registration',
@@ -79,22 +110,153 @@ class FuzzyIntentRecognizer:
             'ghana': 'Ghana',
             'gh': 'Ghana',
             'gha': 'Ghana',
+            'south africa': 'South Africa',
+            'sa': 'South Africa',
+            'za': 'South Africa',
+            
+            # Betting Markets
+            'over/under': 'Over/Under',
+            'o/u': 'Over/Under',
+            'over under': 'Over/Under',
+            'ovr/undr': 'Over/Under',
+            'asian handicap': 'Asian Handicap',
+            'ah': 'Asian Handicap',
+            'asian hcp': 'Asian Handicap',
+            'asn handicap': 'Asian Handicap',
+            'both teams to score': 'Both Teams To Score',
+            'btts': 'Both Teams To Score',
+            'both teams score': 'Both Teams To Score',
+            'both to score': 'Both Teams To Score',
+            'correct score': 'Correct Score',
+            'cs': 'Correct Score',
+            'correct scr': 'Correct Score',
+            'exact score': 'Correct Score',
+            'draw no bet': 'Draw No Bet',
+            'dnb': 'Draw No Bet',
+            'draw no': 'Draw No Bet',
+            'drw no bet': 'Draw No Bet',
+            'double chance': 'Double Chance',
+            'dc': 'Double Chance',
+            'dbl chance': 'Double Chance',
+            'double chnce': 'Double Chance',
+            'handicap': 'Handicap',
+            'hcp': 'Handicap',
+            'handi': 'Handicap',
+            'handicp': 'Handicap',
+            'total goals': 'Total Goals',
+            'total gls': 'Total Goals',
+            'tot goals': 'Total Goals',
+            'ttl goals': 'Total Goals',
+            'clean sheet': 'Clean Sheet',
+            'clean sht': 'Clean Sheet',
+            'cln sheet': 'Clean Sheet',
+            'first goal scorer': 'First Goal Scorer',
+            'fgs': 'First Goal Scorer',
+            '1st goal': 'First Goal Scorer',
+            'first scorer': 'First Goal Scorer',
+            'anytime scorer': 'Anytime Scorer',
+            'ats': 'Anytime Scorer',
+            'anytime scr': 'Anytime Scorer',
+            'any scorer': 'Anytime Scorer',
+            'corners': 'Corners',
+            'crnrs': 'Corners',
+            'corner kicks': 'Corners',
+            'corners bet': 'Corners',
+            'cards': 'Cards',
+            'yellow cards': 'Cards',
+            'booking': 'Cards',
+            'bookings': 'Cards',
+            'penalties': 'Penalties',
+            'pens': 'Penalties',
+            'penalty': 'Penalties',
+            'spot kicks': 'Penalties',
+            
+            # Slots Games
+            'book of dead': 'Book Of Dead',
+            'starburst': 'Starburst',
+            'gonzo quest': 'Gonzo Quest',
+            'gonzo\'s quest': 'Gonzo Quest',
+            'mega moolah': 'Mega Moolah',
+            'buffalo': 'Buffalo',
+            'sweet bonanza': 'Sweet Bonanza',
+            'gates of olympus': 'Gates Of Olympus',
+            'wolf gold': 'Wolf Gold',
+            'fire joker': 'Fire Joker',
+            'twin spin': 'Twin Spin',
+            'bonanza': 'Bonanza',
+            'extra chilli': 'Extra Chilli',
+            'divine fortune': 'Divine Fortune',
+            'hall of gods': 'Hall Of Gods',
+            
+            # Crash Games
+            'aviator': 'Aviator',
+            'crash': 'Crash Games',
+            'jetx': 'JetX',
+            'spaceman': 'Spaceman',
+            'mines': 'Mines',
+            'plinko': 'Plinko',
+            'limbo': 'Limbo',
+            
+            # Betgames
+            'wheel of fortune': 'Wheel Of Fortune',
+            'lucky 7': 'Lucky 7',
+            'bet on poker': 'Bet On Poker',
+            'war of bets': 'War Of Bets',
+            'lucky 6': 'Lucky 6',
+            
+            # Lottery/Lucky Numbers
+            'lucky numbers': 'Lucky Numbers',
+            'results': 'Results',
+            'draw results': 'Results',
+            'winning numbers': 'Results',
+            'latest draw': 'Results',
+            'predictions': 'Predictions',
+            'hot numbers': 'Predictions',
+            'cold numbers': 'Predictions',
+            'statistics': 'Statistics',
+            'frequency': 'Statistics',
+            'most drawn': 'Statistics',
+            'overdue numbers': 'Statistics',
+            'draw time': 'Draw Time',
+            'next draw': 'Draw Time',
+            'schedule': 'Draw Time',
+            
+            # Horse Racing
+            'tips': 'Tips',
+            'form': 'Form',
+            'odds': 'Odds',
+            'runners': 'Runners',
+            'jockey': 'Jockey',
+            'trainer': 'Trainer',
+            'win': 'Win',
+            'place': 'Place',
+            'show': 'Show',
+            'exacta': 'Exacta',
+            'trifecta': 'Trifecta',
+            'pick 6': 'Pick 6',
+            
+            # How-to content
+            'how to': 'How To',
+            'how to play': 'How To Play',
+            'rules': 'Rules',
+            'guide': 'Guide',
+            'strategy': 'Strategy',
+            'meaning': 'Meaning',
             
             # Other common intents
             'code': 'Codes',
             'codes': 'Codes',
-            'booking': 'Codes',
-            'prediction': 'Predictions',
-            'predictions': 'Predictions',
-            'tips': 'Predictions',
-            'aviator': 'Aviator',
-            'crash': 'Aviator',
             'live': 'Live',
             'livescore': 'Live',
-            'results': 'Live',
             'casino': 'Games',
             'games': 'Games',
-            'slots': 'Games',
+            'slots': 'Slots',
+            
+            # General categories
+            'general': 'General',
+            'contact': 'Contact',
+            'support': 'Support',
+            'help': 'Help',
             
             # Broken links
             '.com': 'Broken Links',
@@ -113,14 +275,25 @@ class FuzzyIntentRecognizer:
             'sports': 'Sports',
             'league': 'Sports',
             'srl': 'Sports',
+            'match': 'Sports',
+            'matches': 'Sports',
+            'premier league': 'Sports',
             
             # Casino terms
             'casino': 'Casino',
             'jackpot': 'Casino',
             'slots': 'Casino',
+            'slot': 'Casino',
             'spin': 'Casino',
             'aviator': 'Casino',
             'crash': 'Casino',
+            'roulette': 'Casino',
+            'blackjack': 'Casino',
+            'baccarat': 'Casino',
+            'poker': 'Casino',
+            'betgames': 'Casino',
+            'live casino': 'Casino',
+            'live dealer': 'Casino',
             
             # Betting terms
             'bet': 'Betting',
@@ -128,6 +301,56 @@ class FuzzyIntentRecognizer:
             'odds': 'Betting',
             'wager': 'Betting',
             'stake': 'Betting',
+            'markets': 'Betting',
+            'handicap': 'Betting',
+            
+            # Horse Racing terms
+            'horse': 'Horse Racing',
+            'horses': 'Horse Racing',
+            'racing': 'Horse Racing',
+            'race': 'Horse Racing',
+            'racecourse': 'Horse Racing',
+            'jockey': 'Horse Racing',
+            'trainer': 'Horse Racing',
+            'thoroughbred': 'Horse Racing',
+            'gallop': 'Horse Racing',
+            'turf': 'Horse Racing',
+            'derby': 'Horse Racing',
+            
+            # Lottery terms
+            'lottery': 'Lottery',
+            'lotto': 'Lottery',
+            'powerball': 'Lottery',
+            'mega millions': 'Lottery',
+            'euromillions': 'Lottery',
+            'lucky numbers': 'Lottery',
+            'draw': 'Lottery',
+            'numbers': 'Lottery',
+            'uk49': 'Lottery',
+            'uk 49': 'Lottery',
+            'uk49s': 'Lottery',
+            '49s': 'Lottery',
+            'teatime': 'Lottery',
+            'lunchtime': 'Lottery',
+            'daily lotto': 'Lottery',
+            'france lotto': 'Lottery',
+            'russian lotto': 'Lottery',
+            'gosloto': 'Lottery',
+            'stoloto': 'Lottery',
+            'keno': 'Lottery',
+            
+            # South African Racecourses
+            'kenilworth': 'Horse Racing',
+            'turffontein': 'Horse Racing',
+            'scottsville': 'Horse Racing',
+            'flamingo park': 'Horse Racing',
+            'fairview': 'Horse Racing',
+            'greyville': 'Horse Racing',
+            'vaal': 'Horse Racing',
+            'clairwood': 'Horse Racing',
+            'arlington': 'Horse Racing',
+            'milnerton': 'Horse Racing',
+            'runners': 'Horse Racing',
         }
         return topics
     
@@ -234,6 +457,97 @@ class FuzzyIntentRecognizer:
         
         return (best_match, best_score) if best_match else ('Betting', 50)
     
+    def _determine_sub_topic(self, keyword: str, main_topic: str) -> str:
+        """Determine sub-topic based on main topic and keyword content"""
+        keyword_lower = keyword.lower()
+        
+        if main_topic == 'Sports':
+            if any(term in keyword_lower for term in ['football', 'soccer']):
+                return 'Soccer/Football'
+            elif any(term in keyword_lower for term in ['rugby', 'cricket', 'tennis']):
+                return 'Other Sports'
+            else:
+                return 'General'
+                
+        elif main_topic == 'Casino':
+            # Crash Games
+            if any(term in keyword_lower for term in ['aviator', 'jetx', 'spaceman', 'crash', 'mines', 'plinko', 'limbo']):
+                return 'Crash Games'
+            # Slots
+            elif any(term in keyword_lower for term in ['slots', 'slot', 'book of dead', 'starburst', 'gonzo', 'mega moolah', 'sweet bonanza', 'gates of olympus']):
+                return 'Slots'
+            # Betgames
+            elif any(term in keyword_lower for term in ['betgames', 'wheel of fortune', 'lucky 7', 'lucky 6', 'bet on poker', 'war of bets']):
+                return 'Betgames'
+            # Live Casino
+            elif any(term in keyword_lower for term in ['live', 'dealer', 'roulette', 'blackjack', 'baccarat']):
+                return 'Live Casino'
+            else:
+                return 'Games'
+                
+        elif main_topic == 'Betting':
+            if any(term in keyword_lower for term in ['football', 'soccer']):
+                return 'Soccer/Football'
+            elif any(term in keyword_lower for term in ['rugby', 'cricket', 'tennis']):
+                return 'Other Sports'
+            else:
+                return 'Sport'
+                
+        elif main_topic == 'Horse Racing':
+            # SA Racecourses
+            if any(term in keyword_lower for term in ['kenilworth', 'turffontein', 'scottsville', 'flamingo park', 'fairview', 'greyville']):
+                racecourse_map = {
+                    'kenilworth': 'Kenilworth',
+                    'turffontein': 'Turffontein', 
+                    'scottsville': 'Scottsville',
+                    'flamingo park': 'Flamingo Park',
+                    'fairview': 'Fairview',
+                    'greyville': 'Greyville'
+                }
+                for course, name in racecourse_map.items():
+                    if course in keyword_lower:
+                        return name
+            elif any(term in keyword_lower for term in ['vaal', 'clairwood', 'arlington', 'milnerton']):
+                racecourse_map = {
+                    'vaal': 'Vaal',
+                    'clairwood': 'Clairwood',
+                    'arlington': 'Arlington', 
+                    'milnerton': 'Milnerton'
+                }
+                for course, name in racecourse_map.items():
+                    if course in keyword_lower:
+                        return name
+            else:
+                return 'General Racing'
+                
+        elif main_topic == 'Lottery':
+            # International Lotteries
+            if any(term in keyword_lower for term in ['sa lottery', 'south african lottery', 'powerball sa', 'daily lotto']):
+                return 'SA Lottery'
+            elif any(term in keyword_lower for term in ['uk lottery', 'uk49', 'uk 49', '49s', 'teatime', 'lunchtime']):
+                return 'UK49'
+            elif any(term in keyword_lower for term in ['euromillions', 'euro millions']):
+                return 'EuroMillions'
+            elif any(term in keyword_lower for term in ['powerball', 'mega millions', 'usa lotto']):
+                # Context-aware PowerBall classification - Default to SA unless explicit US markers
+                if any(us_context in keyword_lower for us_context in ['usa', 'us ', 'power play', 'double play', 'multi-state', 'tennessee', 'florida', 'monday draw', 'wednesday draw', 'saturday draw']):
+                    return 'USA Lotto'
+                elif 'mega millions' in keyword_lower:
+                    return 'USA Lotto'  # Mega Millions is only US
+                else:
+                    return 'SA Lottery'  # Default PowerBall to SA
+            elif any(term in keyword_lower for term in ['france lotto', 'french lotto']):
+                return 'France Lotto'
+            elif any(term in keyword_lower for term in ['russian lotto', 'stoloto']):
+                return 'Russian Lotto'
+            elif any(term in keyword_lower for term in ['gosloto', 'gosolto']):
+                return 'Gosloto'
+            else:
+                return 'General Lottery'
+                
+        else:
+            return 'General'
+    
     def analyze_intent(self, keyword: str, discovered_brands: Optional[Set[str]] = None) -> Dict[str, any]:
         """
         Analyze a keyword's intent using fuzzy matching
@@ -255,25 +569,7 @@ class FuzzyIntentRecognizer:
             main_conf = topic_conf
             
             # Determine sub-topic based on main topic
-            if main_topic == 'Sports':
-                if any(term in keyword.lower() for term in ['football', 'soccer']):
-                    sub_topic = 'Soccer/football'
-                else:
-                    sub_topic = 'General'
-            elif main_topic == 'Casino':
-                if 'aviator' in keyword.lower():
-                    sub_topic = 'Crash Games'
-                elif any(term in keyword.lower() for term in ['jackpot', 'spin']):
-                    sub_topic = 'Slots'
-                else:
-                    sub_topic = 'Games'
-            elif main_topic == 'Betting':
-                if any(term in keyword.lower() for term in ['football', 'soccer']):
-                    sub_topic = 'Soccer/football'
-                else:
-                    sub_topic = 'Sport'
-            else:
-                sub_topic = 'General'
+            sub_topic = self._determine_sub_topic(keyword, main_topic)
         
         return {
             'main': main_topic,
