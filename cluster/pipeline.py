@@ -122,7 +122,10 @@ def run_pipeline_legacy(
     
     for vertical, idxs in df.groupby("vertical").groups.items():
         try:
-            model = load_intent_model(vertical, models_dir=models_dir)
+            # Ensure vertical is a string and models_dir is Path or None
+            vertical_str = str(vertical)
+            models_path = Path(models_dir) if models_dir else None
+            model = load_intent_model(vertical_str, models_dir=models_path)
             subset = df.loc[idxs]
             labels, scores = model.predict_with_prob(subset)
             intents.loc[idxs] = labels
