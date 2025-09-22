@@ -33,7 +33,14 @@ This project is a Streamlit web application that provides keyword clustering and
 - Application fully functional and ready for production deployment
 - Web interface shows real-time analysis with semantic insights
 
-## Recent Changes (September 18, 2025)
+## Recent Changes (September 22, 2025)
+- **COMPREHENSIVE GAMBLING ECOSYSTEM**: Expanded from 2 to 6 main categories: Branded, Sports, Casino, Lottery, Horse Racing, Betting
+- **INTERNATIONAL LOTTERY COVERAGE**: Full support for SA PowerBall (default), UK49 (teatime/lunchtime), EuroMillions, USA Lotto, France Lotto, Russian Gosloto
+- **SOUTH AFRICAN HORSE RACING**: Complete vocabulary for major racecourses (Kenilworth, Turffontein, Scottsville, Greyville, Vaal, etc.)
+- **COMPREHENSIVE CASINO CATEGORIES**: Detailed sub-categories for Slots (Book of Dead, Starburst, Mega Moolah), Crash Games (Aviator, JetX, Mines), Betgames, Live Casino
+- **ADVANCED BETTING MARKETS**: Extensive coverage of betting terminology with misspellings (BTTS, Over/Under, Asian Handicap, DNB, DC, etc.)
+- **SMART CONTEXT CLASSIFICATION**: PowerBall defaults to SA unless explicit US markers, fixed brand collision issues
+- **ENHANCED DATA INTEGRITY**: Removed 'lotto' from brand vocabulary preventing lottery misclassification
 - **FUZZY INTENT RECOGNITION**: Added `cluster/fuzzy_intent.py` for understanding misspelled keywords
 - **Real-world robustness**: System now handles typos, abbreviations, split words without changing original keywords
 - **Smart pattern matching**: Uses rapidfuzz for intelligent similarity scoring and brand recognition
