@@ -10,11 +10,15 @@ from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from .fuzzy_intent import FuzzyIntentRecognizer
+from .url_intent_analyzer import UrlIntentAnalyzer
 
 class SemanticKeywordAnalyzer:
     def __init__(self):
         # Initialize fuzzy intent recognizer for handling misspellings
         self.fuzzy_recognizer = FuzzyIntentRecognizer()
+        
+        # Initialize URL intent analyzer for enhanced classification
+        self.url_analyzer = UrlIntentAnalyzer()
         
         # Brand patterns - will be discovered from data  
         self.brand_patterns = set()
@@ -283,6 +287,86 @@ class SemanticKeywordAnalyzer:
         df = df.drop(['cluster_group', 'main_conf', 'mod_conf'], axis=1)
         
         return df[['Main', 'Sub', 'Mod', 'Keyword']]  # Clean 4-column output
+    
+    def analyze_keywords_with_urls(self, keyword_url_pairs: List[Tuple[str, str]]) -> pd.DataFrame:
+        """
+        Enhanced analysis function that uses URL patterns to improve intent classification
+        
+        Args:
+            keyword_url_pairs: List of (keyword, url) tuples
+            
+        Returns:
+            DataFrame with same 4-column structure but enhanced accuracy from URL analysis
+        """
+        # Extract just keywords for brand discovery
+        keywords = [pair[0] for pair in keyword_url_pairs]
+        self.discover_brands(keywords)
+        
+        results = []
+        
+        for keyword, url in keyword_url_pairs:
+            # Get semantic analysis first
+            intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
+            
+            # Convert to format expected by URL analyzer
+            semantic_result = {
+                'main_topic': intent_analysis['main'],
+                'sub_topic': intent_analysis['sub'],
+                'modifier': intent_analysis['modifier']
+            }
+            
+            # Enhance with URL analysis if URL is provided
+            if url and url.strip():
+                enhanced_result = self.url_analyzer.enhance_semantic_classification(
+                    keyword, url, semantic_result
+                )
+                
+                # Use enhanced results if available
+                main_topic = enhanced_result.get('main_topic', intent_analysis['main'])
+                sub_topic = enhanced_result.get('sub_topic', intent_analysis['sub'])
+                modifier = enhanced_result.get('modifier', intent_analysis['modifier'])
+                
+                # Track URL enhancement metadata
+                url_enhanced = enhanced_result.get('url_override', False)
+                url_confidence = enhanced_result.get('url_confidence', 0)
+            else:
+                # Fall back to semantic-only analysis
+                main_topic = intent_analysis['main']
+                sub_topic = intent_analysis['sub']  
+                modifier = intent_analysis['modifier']
+                url_enhanced = False
+                url_confidence = 0
+            
+            results.append({
+                'Main': main_topic,
+                'Sub': sub_topic,
+                'Mod': modifier,
+                'Keyword': keyword,
+                'URL': url,
+                'URL_Enhanced': url_enhanced,
+                'URL_Confidence': url_confidence
+            })
+        
+        df = pd.DataFrame(results)
+        
+        # Add cluster IDs using semantic clustering (same as original method)
+        df['cluster_group'] = df['Main'] + '_' + df['Sub']
+        cluster_id = 0
+        cluster_map = {}
+        
+        for group_name, group_df in df.groupby('cluster_group'):
+            group_keywords = group_df['Keyword'].tolist()
+            clusters = self.semantic_clustering(group_keywords)
+            
+            for cluster_keywords in clusters.values():
+                for kw in cluster_keywords:
+                    cluster_map[kw] = cluster_id
+                cluster_id += 1
+        
+        df['Cluster_ID'] = df['Keyword'].map(cluster_map)
+        
+        # Clean up temporary columns and return same 4-column format
+        return df[['Main', 'Sub', 'Mod', 'Keyword']]
 
 
 def analyze_keyword_file(csv_path: str) -> pd.DataFrame:
