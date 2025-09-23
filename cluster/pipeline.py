@@ -59,26 +59,67 @@ def run_pipeline(
     config_path: Optional[str | Path] = None,
     models_dir: Optional[str | Path] = None,
 ) -> None:
-    """New semantic analysis pipeline that outputs Main/Sub/Modifier/Keyword structure"""
+    """Enhanced semantic analysis pipeline that uses URL data when available"""
     
     df = pd.read_csv(csv_in)
-    if "keyword" not in df.columns:
-        raise ValueError("Input CSV must have a 'keyword' column.")
+    if "keyword" not in df.columns and "Keyword" not in df.columns:
+        raise ValueError("Input CSV must have a 'keyword' or 'Keyword' column.")
     
-    print(f"🔍 Analyzing {len(df)} keywords with semantic ML...")
+    # Normalize column names
+    keyword_col = "Keyword" if "Keyword" in df.columns else "keyword"
+    keywords = df[keyword_col].tolist()
     
-    # Use the new semantic analyzer
+    print(f"🔍 Analyzing {len(keywords)} keywords with semantic ML...")
+    
+    # Check for URL columns
+    url_columns = [col for col in df.columns if 'url' in col.lower() and 'current' in col.lower()]
+    
     analyzer = SemanticKeywordAnalyzer()
-    results_df = analyzer.analyze_keywords(df["keyword"].tolist())
+    
+    # Use URL-enhanced analysis if URL data is available
+    if url_columns:
+        url_col = url_columns[0]  # Use first URL column found
+        print(f"🔗 Found URL data in '{url_col}' - using URL-enhanced analysis!")
+        
+        # Create keyword-URL pairs, handling NaN values
+        keyword_url_pairs = []
+        for i, keyword in enumerate(keywords):
+            url = df.iloc[i][url_col]
+            if pd.isna(url):
+                url = ""
+            keyword_url_pairs.append((keyword, str(url)))
+        
+        results_df = analyzer.analyze_keywords_with_urls(keyword_url_pairs)
+        # Add flag to indicate URL enhancement was used
+        results_df['URL_Enhanced'] = True
+        print(f"✅ URL-enhanced analysis complete!")
+        print(f"   - Used ranking page intelligence from {len([p for p in keyword_url_pairs if p[1]])} URLs")
+    else:
+        print("📝 No URL data found - using semantic analysis only")
+        results_df = analyzer.analyze_keywords(keywords)
+        results_df['URL_Enhanced'] = False
     
     print(f"✅ Analysis complete! Generated 4-column structure:")
     print(f"   - Discovered {len(analyzer.brand_patterns)} brands automatically")
     print(f"   - Classified into semantic topics and modifiers")
     
-    # Save the clean 4-column output
+    # Preserve additional columns from original CSV if they exist
+    preserve_cols = ['Volume', 'Current position', 'KD', 'CPC', 'Organic traffic']
+    additional_data = {}
+    
+    for col in preserve_cols:
+        if col in df.columns:
+            additional_data[col] = df[col].tolist()
+    
+    # Add preserved columns to results
+    for col, values in additional_data.items():
+        results_df[col] = values
+    
+    # Save the enhanced output
     results_df.to_csv(csv_out, index=False)
     
-    print(f"💾 Results saved to {csv_out}")
+    preserved_info = f" + {len(additional_data)} SERP metrics" if additional_data else ""
+    print(f"💾 Results saved to {csv_out}{preserved_info}")
 
 
 # Legacy function for backward compatibility

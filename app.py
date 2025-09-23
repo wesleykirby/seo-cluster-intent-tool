@@ -32,10 +32,10 @@ def process_file(uploaded_file, min_sim, config_path):
 
 st.title("🎯 Smart SEO Keyword Analyzer")
 
-st.info("🚀 **New Semantic Analysis!** Upload a CSV with just a 'keyword' column and get clean Main/Sub/Modifier structure with ML-powered pattern discovery!")
+st.info("🚀 **Enhanced Semantic Analysis!** Upload a CSV with a 'keyword' column. If you have URL data (e.g., 'Current URL'), the system will use ranking page intelligence for superior accuracy!")
 
 with st.form("cluster_form"):
-    uploaded = st.file_uploader("Upload keyword CSV", type=["csv"], help="Required: CSV with 'keyword' column. Industry vertical will be auto-detected.")
+    uploaded = st.file_uploader("Upload keyword CSV", type=["csv"], help="Required: CSV with 'keyword' or 'Keyword' column. Optional: Include 'Current URL' for enhanced analysis with ranking page intelligence.")
     min_sim = st.slider("Minimum similarity", 0.0, 1.0, 0.8, step=0.05)
     config_path = st.text_input("Config path (optional)")
     active_threshold = st.slider(
@@ -51,18 +51,44 @@ with st.form("cluster_form"):
 # Preview uploaded file
 if uploaded is not None:
     temp_df = pd.read_csv(uploaded)
+    
+    # Check for keyword column (case-insensitive)
+    keyword_col = None
     if "keyword" in temp_df.columns:
-        st.success(f"📊 Ready to analyze **{len(temp_df)} keywords** with semantic ML!")
+        keyword_col = "keyword"
+    elif "Keyword" in temp_df.columns:
+        keyword_col = "Keyword"
+    
+    if keyword_col:
+        # Check for URL columns
+        url_columns = [col for col in temp_df.columns if 'url' in col.lower() and 'current' in col.lower()]
+        serp_columns = [col for col in temp_df.columns if col in ['Volume', 'Current position', 'KD', 'CPC', 'Organic traffic']]
         
-        # Show sample keywords
-        st.write("**Sample keywords from your file:**")
-        sample_keywords = temp_df['keyword'].head(10).tolist()
-        for i, kw in enumerate(sample_keywords, 1):
-            st.write(f"{i}. {kw}")
-        if len(temp_df) > 10:
-            st.write(f"... and {len(temp_df) - 10} more")
+        # Enhanced preview message
+        enhancement_msg = "📊 Ready to analyze **{} keywords** with semantic ML!".format(len(temp_df))
+        if url_columns:
+            enhancement_msg += f"\n🔗 **URL-Enhanced Analysis Available!** Found ranking URL data in '{url_columns[0]}' column."
+        if serp_columns:
+            enhancement_msg += f"\n📈 **SERP Data Detected!** Will preserve {len(serp_columns)} metrics: {', '.join(serp_columns)}"
+        
+        st.success(enhancement_msg)
+        
+        # Show sample keywords with URL if available
+        st.write("**Sample data from your file:**")
+        preview_cols = [keyword_col]
+        if url_columns:
+            preview_cols.append(url_columns[0])
+        if serp_columns:
+            preview_cols.extend(serp_columns[:3])  # Show first 3 SERP metrics
+            
+        sample_data = temp_df[preview_cols].head(5)
+        st.dataframe(sample_data, use_container_width=True)
+        
+        if len(temp_df) > 5:
+            st.write(f"... and {len(temp_df) - 5} more rows")
+            
     else:
-        st.error("❌ CSV must contain a 'keyword' column")
+        st.error("❌ CSV must contain a 'keyword' or 'Keyword' column")
 
 if submitted:
     if not uploaded:
@@ -71,7 +97,13 @@ if submitted:
         with st.spinner("🧠 Running semantic analysis with ML pattern discovery..."):
             df, out_path = process_file(uploaded, min_sim, config_path)
         
-        st.success("🎉 **Analysis Complete!** Your keywords have been organized into clean semantic structure.")
+        # Check if URL enhancement was used
+        url_enhanced = df.get('URL_Enhanced', pd.Series([False])).iloc[0] if len(df) > 0 else False
+        
+        if url_enhanced:
+            st.success("🎉 **URL-Enhanced Analysis Complete!** Used ranking page intelligence to improve classification accuracy.")
+        else:
+            st.success("🎉 **Analysis Complete!** Your keywords have been organized into clean semantic structure.")
         
         # Show results summary
         col1, col2, col3, col4 = st.columns(4)
@@ -102,11 +134,16 @@ if submitted:
         
         with col4:
             st.metric("Total Keywords", len(df))
-            st.write("**Column structure:**")
+            st.write("**Output structure:**")
             st.write("✅ Main Topic")
             st.write("✅ Sub Topic") 
             st.write("✅ Modifier")
             st.write("✅ Keyword")
+            
+            # Show enhanced features
+            serp_cols = [col for col in df.columns if col in ['Volume', 'Current position', 'KD', 'CPC', 'Organic traffic']]
+            if serp_cols:
+                st.write(f"📈 + {len(serp_cols)} SERP metrics")
         
         st.divider()
         
