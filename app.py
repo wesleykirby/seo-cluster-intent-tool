@@ -34,8 +34,11 @@ st.title("🎯 Smart SEO Keyword Analyzer")
 
 st.info("🚀 **Enhanced Semantic Analysis!** Upload a CSV with a 'keyword' column. If you have URL data (e.g., 'Current URL'), the system will use ranking page intelligence for superior accuracy!")
 
+# File uploader outside form for immediate preview
+uploaded = st.file_uploader("Upload keyword CSV", type=["csv"], help="Required: CSV with 'keyword' or 'Keyword' column. Optional: Include 'Current URL' for enhanced analysis with ranking page intelligence.")
+
+# Form for processing parameters
 with st.form("cluster_form"):
-    uploaded = st.file_uploader("Upload keyword CSV", type=["csv"], help="Required: CSV with 'keyword' or 'Keyword' column. Optional: Include 'Current URL' for enhanced analysis with ranking page intelligence.")
     min_sim = st.slider("Minimum similarity", 0.0, 1.0, 0.8, step=0.05)
     config_path = st.text_input("Config path (optional)")
     active_threshold = st.slider(
@@ -48,8 +51,9 @@ with st.form("cluster_form"):
     )
     submitted = st.form_submit_button("Process")
 
-# Preview uploaded file
+# Preview uploaded file - Now shows immediately when file is selected!
 if uploaded is not None:
+    st.info("🔍 **Instant Preview** - File loaded, analyzing structure...")
     try:
         temp_df = pd.read_csv(uploaded)
         st.write(f"📊 **File loaded successfully!** Found {len(temp_df)} rows and {len(temp_df.columns)} columns")
@@ -91,6 +95,8 @@ if uploaded is not None:
             
             if len(temp_df) > 5:
                 st.write(f"... and {len(temp_df) - 5} more rows")
+                
+            st.info("👆 **Preview ready!** Click 'Process' button below to start analysis.")
                 
         else:
             st.error("❌ CSV must contain a 'keyword' or 'Keyword' column")
