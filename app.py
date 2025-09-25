@@ -50,45 +50,54 @@ with st.form("cluster_form"):
 
 # Preview uploaded file
 if uploaded is not None:
-    temp_df = pd.read_csv(uploaded)
-    
-    # Check for keyword column (case-insensitive)
-    keyword_col = None
-    if "keyword" in temp_df.columns:
-        keyword_col = "keyword"
-    elif "Keyword" in temp_df.columns:
-        keyword_col = "Keyword"
-    
-    if keyword_col:
-        # Check for URL columns
-        url_columns = [col for col in temp_df.columns if 'url' in col.lower() and 'current' in col.lower()]
-        serp_columns = [col for col in temp_df.columns if col in ['Volume', 'Current position', 'KD', 'CPC', 'Organic traffic']]
+    try:
+        temp_df = pd.read_csv(uploaded)
+        st.write(f"📊 **File loaded successfully!** Found {len(temp_df)} rows and {len(temp_df.columns)} columns")
         
-        # Enhanced preview message
-        enhancement_msg = "📊 Ready to analyze **{} keywords** with semantic ML!".format(len(temp_df))
-        if url_columns:
-            enhancement_msg += f"\n🔗 **URL-Enhanced Analysis Available!** Found ranking URL data in '{url_columns[0]}' column."
-        if serp_columns:
-            enhancement_msg += f"\n📈 **SERP Data Detected!** Will preserve {len(serp_columns)} metrics: {', '.join(serp_columns)}"
+        # Show all columns for debugging
+        st.write(f"**Columns in your file:** {', '.join(temp_df.columns)}")
         
-        st.success(enhancement_msg)
+        # Check for keyword column (case-insensitive)
+        keyword_col = None
+        if "keyword" in temp_df.columns:
+            keyword_col = "keyword"
+        elif "Keyword" in temp_df.columns:
+            keyword_col = "Keyword"
         
-        # Show sample keywords with URL if available
-        st.write("**Sample data from your file:**")
-        preview_cols = [keyword_col]
-        if url_columns:
-            preview_cols.append(url_columns[0])
-        if serp_columns:
-            preview_cols.extend(serp_columns[:3])  # Show first 3 SERP metrics
+        if keyword_col:
+            # Check for URL columns
+            url_columns = [col for col in temp_df.columns if 'url' in col.lower() and 'current' in col.lower()]
+            serp_columns = [col for col in temp_df.columns if col in ['Volume', 'Current position', 'KD', 'CPC', 'Organic traffic']]
             
-        sample_data = temp_df[preview_cols].head(5)
-        st.dataframe(sample_data, use_container_width=True)
-        
-        if len(temp_df) > 5:
-            st.write(f"... and {len(temp_df) - 5} more rows")
+            # Enhanced preview message
+            enhancement_msg = f"✅ Ready to analyze **{len(temp_df)} keywords** with semantic ML!"
+            if url_columns:
+                enhancement_msg += f"\n🔗 **URL-Enhanced Analysis Available!** Found ranking URL data in '{url_columns[0]}' column."
+            if serp_columns:
+                enhancement_msg += f"\n📈 **SERP Data Detected!** Will preserve {len(serp_columns)} metrics: {', '.join(serp_columns)}"
             
-    else:
-        st.error("❌ CSV must contain a 'keyword' or 'Keyword' column")
+            st.success(enhancement_msg)
+            
+            # Show sample data
+            st.write("**Sample data from your file:**")
+            preview_cols = [keyword_col]
+            if url_columns:
+                preview_cols.append(url_columns[0])
+            if serp_columns:
+                preview_cols.extend(serp_columns[:3])  # Show first 3 SERP metrics
+                
+            sample_data = temp_df[preview_cols].head(5)
+            st.dataframe(sample_data, use_container_width=True)
+            
+            if len(temp_df) > 5:
+                st.write(f"... and {len(temp_df) - 5} more rows")
+                
+        else:
+            st.error("❌ CSV must contain a 'keyword' or 'Keyword' column")
+            
+    except Exception as e:
+        st.error(f"❌ Error reading CSV file: {str(e)}")
+        st.write("Please make sure your file is a valid CSV format.")
 
 if submitted:
     if not uploaded:
