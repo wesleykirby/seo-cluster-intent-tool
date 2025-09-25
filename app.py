@@ -98,7 +98,9 @@ if submitted:
             df, out_path = process_file(uploaded, min_sim, config_path)
         
         # Check if URL enhancement was used
-        url_enhanced = df.get('URL_Enhanced', pd.Series([False])).iloc[0] if len(df) > 0 else False
+        url_enhanced = False
+        if len(df) > 0 and 'URL_Enhanced' in df.columns:
+            url_enhanced = df['URL_Enhanced'].iloc[0]
         
         if url_enhanced:
             st.success("🎉 **URL-Enhanced Analysis Complete!** Used ranking page intelligence to improve classification accuracy.")
