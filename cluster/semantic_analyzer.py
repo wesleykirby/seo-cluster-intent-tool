@@ -121,7 +121,7 @@ class SemanticKeywordAnalyzer:
         return brands
         
     def is_slot_game(self, keyword: str) -> bool:
-        """Check if keyword contains a slot game name"""
+        """Check if keyword contains a slot game name or slot-related terms"""
         keyword_lower = keyword.lower().strip()
         
         # Check direct match with known slot games
@@ -133,11 +133,35 @@ class SemanticKeywordAnalyzer:
             if slot_game in keyword_lower or keyword_lower in slot_game:
                 return True
                 
-        # Check for common slot patterns
+        # Check for specific slot patterns
         slot_patterns = ['slots', 'slot machine', 'free spins', 'megaways', 'hold and win']
         if any(pattern in keyword_lower for pattern in slot_patterns):
             return True
             
+        return False
+    
+    def is_slot_related(self, keyword: str) -> bool:
+        """Check if keyword has slot-related terms (broader than specific games)"""
+        keyword_lower = keyword.lower().strip()
+        
+        # First check if it's a specific slot game
+        if self.is_slot_game(keyword):
+            return True
+            
+        # Check for generic slot/casino gambling terms
+        slot_related_terms = [
+            'slot', 'slots', 'spin', 'spins', 'reel', 'reels',
+            'jackpot', 'win', 'strike', 'lucky', 'fortune', 'gold',
+            'bonus', 'free', 'wild', 'scatter', 'multiplier',
+            'machine', 'game', 'casino', '777', 'fruit'
+        ]
+        
+        # Check if keyword contains slot-related terms
+        words = keyword_lower.split()
+        for word in words:
+            if word in slot_related_terms:
+                return True
+                
         return False
     
     def extract_modifier(self, keyword: str) -> str:
@@ -148,12 +172,13 @@ class SemanticKeywordAnalyzer:
         if any(pattern in keyword_lower for pattern in ['.com', 'www.', 'http']):
             return 'Broken Links'
         
-        # Check if this is a slot game + brand combination
+        # Check if this is a slot-related + brand combination
         is_slot = self.is_slot_game(keyword)
+        is_slot_related = self.is_slot_related(keyword)
         brand_found = self.has_brand(keyword)
         
-        if is_slot and brand_found:
-            return 'Slots'  # Branded slot games get "Slots" modifier
+        if brand_found and (is_slot or is_slot_related):
+            return 'Slots'  # Branded slot games/terms get "Slots" modifier
         
         # Check geographic modifiers
         if any(pattern in keyword_lower for pattern in ['ghana', 'gh', 'gha']):
@@ -200,12 +225,13 @@ class SemanticKeywordAnalyzer:
         """Determine the main topic category - optimized for branded slots"""
         keyword_lower = keyword.lower()
         
-        # Check if this contains both a slot game and a brand
+        # Check if this contains both slot-related terms and a brand
         is_slot = self.is_slot_game(keyword)
+        is_slot_related = self.is_slot_related(keyword)
         brand_found = self.has_brand(keyword)
         
-        # PRIORITY: Branded slots (e.g., "777 strike betway" -> Branded)
-        if brand_found and is_slot:
+        # PRIORITY: Branded slots (specific games OR slot-related terms + brand)
+        if brand_found and (is_slot or is_slot_related):
             return 'Branded'
         
         # Standard brand check (non-slot branded content)
@@ -317,37 +343,67 @@ class SemanticKeywordAnalyzer:
     def analyze_keywords(self, keywords: List[str]) -> pd.DataFrame:
         """
         Main analysis function - converts keywords to 4-column structure
-        Now with fuzzy intent recognition for handling misspellings!
+        Now with enhanced slot game recognition and branded slot optimization!
         """
         
         # Step 1: Discover brands from the data (traditional method)
         self.discover_brands(keywords)
         
-        # Step 2: Use fuzzy intent recognition for each keyword
+        # Step 2: Use enhanced semantic analysis for each keyword
         results = []
         
         for keyword in keywords:
-            # Get fuzzy intent analysis (understands misspellings)
-            intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
-            
-            # Extract the components while preserving original keyword
-            main_topic = intent_analysis['main']
-            sub_topic = intent_analysis['sub']
-            modifier = intent_analysis['modifier']
-            
-            # Add confidence information as metadata (could be useful for debugging)
-            confidence_data = {
-                'main_conf': intent_analysis['main_confidence'],
-                'mod_conf': intent_analysis['modifier_confidence']
-            }
-            
-            results.append({
-                'Main': main_topic,  # Already properly formatted from fuzzy recognizer
-                'Sub': sub_topic,
-                'Mod': modifier,
-                'Keyword': keyword,  # Original keyword preserved!
-                **confidence_data  # Include confidence scores for potential debugging
-            })
+            try:
+                # Check if this is a slot game or branded combination
+                is_slot = self.is_slot_game(keyword)
+                has_brand = self.has_brand(keyword)
+                
+                if is_slot or has_brand:
+                    # Use enhanced semantic methods for slots/brands
+                    main_topic = self.extract_main_topic(keyword)
+                    sub_topic = self.extract_sub_topic(keyword, main_topic)
+                    modifier = self.extract_modifier(keyword)
+                    
+                    results.append({
+                        'Main': main_topic,
+                        'Sub': sub_topic,
+                        'Mod': modifier,
+                        'Keyword': keyword
+                    })
+                else:
+                    # Fall back to fuzzy recognizer for other keywords
+                    intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
+                    
+                    results.append({
+                        'Main': intent_analysis['main'],
+                        'Sub': intent_analysis['sub'],
+                        'Mod': intent_analysis['modifier'],
+                        'Keyword': keyword
+                    })
+                    
+            except Exception as e:
+                # Graceful fallback for any errors
+                print(f"Warning: Error analyzing '{keyword}': {e}")
+                # Use basic semantic methods as fallback
+                try:
+                    main_topic = self.extract_main_topic(keyword)
+                    sub_topic = self.extract_sub_topic(keyword, main_topic)
+                    modifier = self.extract_modifier(keyword)
+                    
+                    results.append({
+                        'Main': main_topic,
+                        'Sub': sub_topic,
+                        'Mod': modifier,
+                        'Keyword': keyword
+                    })
+                except:
+                    # Ultimate fallback
+                    results.append({
+                        'Main': 'Betting',
+                        'Sub': 'General',
+                        'Mod': 'General',
+                        'Keyword': keyword
+                    })
         
         df = pd.DataFrame(results)
         
@@ -370,7 +426,7 @@ class SemanticKeywordAnalyzer:
         df['Cluster_ID'] = df['Keyword'].map(cluster_map)
         
         # Clean up temporary columns
-        df = df.drop(['cluster_group', 'main_conf', 'mod_conf'], axis=1)
+        df = df.drop(['cluster_group'], axis=1)
         
         return df[['Main', 'Sub', 'Mod', 'Keyword']]  # Clean 4-column output
     
@@ -391,15 +447,39 @@ class SemanticKeywordAnalyzer:
         results = []
         
         for keyword, url in keyword_url_pairs:
-            # Get semantic analysis first
-            intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
-            
-            # Convert to format expected by URL analyzer
-            semantic_result = {
-                'main_topic': intent_analysis['main'],
-                'sub_topic': intent_analysis['sub'],
-                'modifier': intent_analysis['modifier']
-            }
+            try:
+                # Check if this is a slot game or branded combination
+                is_slot = self.is_slot_game(keyword)
+                has_brand = self.has_brand(keyword)
+                
+                if is_slot or has_brand:
+                    # Use enhanced semantic methods for slots/brands
+                    main_topic = self.extract_main_topic(keyword)
+                    sub_topic = self.extract_sub_topic(keyword, main_topic)
+                    modifier = self.extract_modifier(keyword)
+                    
+                    semantic_result = {
+                        'main_topic': main_topic,
+                        'sub_topic': sub_topic,
+                        'modifier': modifier
+                    }
+                else:
+                    # Fall back to fuzzy recognizer for other keywords
+                    intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
+                    
+                    semantic_result = {
+                        'main_topic': intent_analysis['main'],
+                        'sub_topic': intent_analysis['sub'],
+                        'modifier': intent_analysis['modifier']
+                    }
+            except Exception as e:
+                # Graceful fallback
+                print(f"Warning: Error analyzing '{keyword}': {e}")
+                semantic_result = {
+                    'main_topic': 'Betting',
+                    'sub_topic': 'General',
+                    'modifier': 'General'
+                }
             
             # Enhance with URL analysis if URL is provided
             if url and url.strip():
