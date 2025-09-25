@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 import tempfile
@@ -10,7 +12,54 @@ from cluster.active_learning import (
     update_label_queue,
 )
 from cluster.pipeline import run_pipeline
-from cluster.text_utils import detect_industry_vertical
+from cluster.text_utils import normalize_kw
+from scripts.weekly_retrain import DEFAULT_TRAINING_PATH, run_retraining
+
+TRAINING_DATA_PATH = Path(DEFAULT_TRAINING_PATH)
+
+
+def _load_training_data() -> pd.DataFrame:
+    if not TRAINING_DATA_PATH.exists():
+        return pd.DataFrame(columns=["keyword", "intent", "keyword_norm"])
+    df = pd.read_csv(TRAINING_DATA_PATH)
+    if "keyword" not in df.columns or "intent" not in df.columns:
+        st.warning(
+            "Existing training data is missing required columns. A fresh upload will overwrite it."
+        )
+        return pd.DataFrame(columns=["keyword", "intent", "keyword_norm"])
+    if "keyword_norm" not in df.columns:
+        df["keyword_norm"] = df["keyword"].astype(str).apply(normalize_kw)
+    return df
+
+
+def _persist_training_data(df: pd.DataFrame) -> None:
+    TRAINING_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(TRAINING_DATA_PATH, index=False)
+
+
+def _prepare_training_upload(uploaded_file) -> pd.DataFrame:
+    df = pd.read_csv(uploaded_file)
+    rename_map = {}
+    if "human_intent" in df.columns and "intent" not in df.columns:
+        rename_map["human_intent"] = "intent"
+    if rename_map:
+        df = df.rename(columns=rename_map)
+    missing = {"keyword", "intent"} - set(df.columns)
+    if missing:
+        raise ValueError(
+            "Uploaded training data must include the following columns: "
+            + ", ".join(sorted(missing))
+        )
+    result = df.copy()
+    result["keyword"] = result["keyword"].astype(str).str.strip()
+    result["intent"] = result["intent"].astype(str).str.strip()
+    result = result[result["keyword"] != ""]
+    result = result[result["intent"] != ""]
+    if result.empty:
+        raise ValueError("No valid (keyword, intent) pairs found in uploaded file.")
+    result["keyword_norm"] = result["keyword"].apply(normalize_kw)
+    keep_cols = [col for col in ["keyword", "intent", "keyword_norm"] if col in result.columns]
+    return result[keep_cols]
 
 def process_file(uploaded_file, min_sim, config_path):
     # Handle both UploadedFile and file path strings
@@ -204,3 +253,94 @@ with col2:
     st.write("• **Keyword**: Your original search term")
 
 st.info("💡 **Pro Tip**: The 'Modifier' column reveals the true user intent - Login (access), App (mobile), Ghana (geo-targeting), etc. This is perfect for SEO content strategy!")
+
+st.divider()
+
+st.subheader("🤖 Train or Update the Intent Model")
+st.write(
+    "Upload freshly labeled intent data and trigger retraining without leaving the app."
+)
+
+training_stats = _load_training_data()
+if not training_stats.empty:
+    intents = training_stats["intent"].nunique()
+    st.success(
+        f"Current training set: {len(training_stats)} examples across {intents} unique intents."
+    )
+else:
+    st.info("No training data found yet. Upload a labeled CSV to get started.")
+
+with st.expander("📤 Upload labeled training data", expanded=False):
+    st.write(
+        "Provide a CSV with at least `keyword` and `intent` columns (or `human_intent`)."
+    )
+    training_upload = st.file_uploader(
+        "Upload labeled CSV", type=["csv"], key="training_upload"
+    )
+    overwrite = st.checkbox(
+        "Overwrite existing training data instead of merging", value=False
+    )
+    if st.button("Add to training set", type="primary"):
+        if not training_upload:
+            st.warning("Please upload a labeled CSV first.")
+        else:
+            try:
+                new_examples = _prepare_training_upload(training_upload)
+                if overwrite:
+                    combined = new_examples
+                else:
+                    existing = _load_training_data()
+                    combined = pd.concat([existing, new_examples], ignore_index=True)
+                combined = combined.drop_duplicates(
+                    subset=["keyword_norm", "intent"], keep="last"
+                ).sort_values("keyword_norm")
+                _persist_training_data(combined)
+                st.success(
+                    f"Saved {len(combined)} total training examples. Last upload contributed {len(new_examples)} rows."
+                )
+            except Exception as exc:
+                st.error(f"❌ Could not process uploaded training data: {exc}")
+
+st.markdown("---")
+
+st.subheader("🪄 Retrain intent classifier from the label queue")
+st.write(
+    "This will pull newly labeled rows from the active-learning queue, evaluate performance, "
+    "and update the training CSV."
+)
+
+holdout_ratio = st.slider(
+    "Holdout ratio for evaluation",
+    0.1,
+    0.9,
+    0.4,
+    step=0.05,
+    help="Portion of new labels reserved for before/after evaluation during retraining.",
+)
+
+if st.button("Run retraining", use_container_width=True):
+    with st.spinner("Retraining model with latest human labels..."):
+        metrics = run_retraining(
+            training_path=TRAINING_DATA_PATH,
+            queue_path=DEFAULT_QUEUE_PATH,
+            holdout_ratio=holdout_ratio,
+        )
+    before = metrics.get("before_f1")
+    after = metrics.get("after_f1")
+    evaluated = metrics.get("evaluated_rows", 0)
+    added = metrics.get("added_rows", 0)
+    if added == 0:
+        st.warning("No newly labeled rows found in the queue. Nothing to retrain.")
+    else:
+        cols = st.columns(2)
+        cols[0].metric(
+            "Before retraining F1",
+            "n/a" if before is None else f"{before:.3f}",
+        )
+        cols[1].metric(
+            "After retraining F1",
+            "n/a" if after is None else f"{after:.3f}",
+        )
+        st.success(
+            f"Evaluated on {evaluated} labeled rows and appended {added} examples to the training set."
+        )
