@@ -23,6 +23,9 @@ class SemanticKeywordAnalyzer:
         # Brand patterns - will be discovered from data  
         self.brand_patterns = set()
         
+        # Load slots games for enhanced recognition
+        self.load_slots_games()
+        
         # Legacy pattern definitions (kept for fallback compatibility)
         self.intent_patterns = {
             'login': ['login', 'log in', 'signin', 'sign in', 'access'],
@@ -47,6 +50,35 @@ class SemanticKeywordAnalyzer:
             'sports': ['football', 'soccer', 'sport', 'srl', 'league'],
             'casino': ['casino', 'aviator', 'jackpot', 'slots', 'games', 'spin']
         }
+    
+    def load_slots_games(self):
+        """Load slots games from the training data for enhanced recognition"""
+        try:
+            import pandas as pd
+            slots_df = pd.read_csv('data/slots_training_data.csv')
+            
+            # Extract unique slot game names (from non-branded entries)
+            casino_mask = slots_df['main_topic'] == 'Casino'
+            casino_slots = slots_df.loc[casino_mask, 'keyword'].tolist()
+            self.slots_games = set(str(game).lower().strip() for game in casino_slots if pd.notna(game))
+            
+            # Also extract branded slot patterns  
+            branded_mask = slots_df['main_topic'] == 'Branded'
+            branded_slots = slots_df.loc[branded_mask]
+            self.branded_slot_patterns = {}
+            
+            for _, row in branded_slots.iterrows():
+                keyword = str(row['keyword']).lower()
+                brand = str(row['sub_topic']).lower()
+                if brand not in self.branded_slot_patterns:
+                    self.branded_slot_patterns[brand] = []
+                self.branded_slot_patterns[brand].append(keyword)
+                
+        except Exception as e:
+            # Fallback to basic slot recognition
+            print(f"Warning: Could not load slots training data: {e}")
+            self.slots_games = set()
+            self.branded_slot_patterns = {}
         
     def discover_brands(self, keywords: List[str]) -> Set[str]:
         """Use ML to discover brand names from keyword patterns"""
@@ -88,13 +120,40 @@ class SemanticKeywordAnalyzer:
         self.brand_patterns.update(brands)
         return brands
         
+    def is_slot_game(self, keyword: str) -> bool:
+        """Check if keyword contains a slot game name"""
+        keyword_lower = keyword.lower().strip()
+        
+        # Check direct match with known slot games
+        if keyword_lower in self.slots_games:
+            return True
+            
+        # Check if any slot game name is contained in the keyword
+        for slot_game in self.slots_games:
+            if slot_game in keyword_lower or keyword_lower in slot_game:
+                return True
+                
+        # Check for common slot patterns
+        slot_patterns = ['slots', 'slot machine', 'free spins', 'megaways', 'hold and win']
+        if any(pattern in keyword_lower for pattern in slot_patterns):
+            return True
+            
+        return False
+    
     def extract_modifier(self, keyword: str) -> str:
-        """Extract the intent modifier from a keyword"""
+        """Extract the intent modifier from a keyword - optimized for branded slots"""
         keyword_lower = keyword.lower()
         
         # Check for broken links FIRST (higher priority)
         if any(pattern in keyword_lower for pattern in ['.com', 'www.', 'http']):
             return 'Broken Links'
+        
+        # Check if this is a slot game + brand combination
+        is_slot = self.is_slot_game(keyword)
+        brand_found = self.has_brand(keyword)
+        
+        if is_slot and brand_found:
+            return 'Slots'  # Branded slot games get "Slots" modifier
         
         # Check geographic modifiers
         if any(pattern in keyword_lower for pattern in ['ghana', 'gh', 'gha']):
@@ -109,7 +168,8 @@ class SemanticKeywordAnalyzer:
             ('Codes', ['code', 'booking', 'deposit', 'short code']),
             ('Predictions', ['prediction', 'tips', 'forecast']),
             ('Aviator', ['aviator', 'crash', 'spribe']),
-            ('Games', ['games', 'casino', 'slots']),
+            ('Slots', ['slots', 'slot machine', 'free spins']) if not brand_found else [],  # Only if not branded
+            ('Games', ['games', 'casino']),
             ('Live', ['live', 'livescore', 'results'])
         ]
         
@@ -119,29 +179,45 @@ class SemanticKeywordAnalyzer:
         
         return 'General'
     
-    def extract_main_topic(self, keyword: str) -> str:
-        """Determine the main topic category"""
+    def has_brand(self, keyword: str) -> bool:
+        """Check if keyword contains a brand name"""
         keyword_lower = keyword.lower()
         
-        # Check for explicit brand mentions (conservative)
-        brand_found = False
+        # Check discovered brand patterns
         for brand in self.brand_patterns:
             if brand in keyword_lower and len(brand) > 4:  # Avoid short generic matches
-                brand_found = True
-                break
+                return True
                 
-        # Also check known brands
+        # Check known brands
         known_brands = ['sportybet', 'msport', 'betpawa', 'betway', 'betika', 'powerbet', 'sportingbet']
         for brand in known_brands:
             if brand in keyword_lower:
-                brand_found = True
-                break
+                return True
+                
+        return False
+    
+    def extract_main_topic(self, keyword: str) -> str:
+        """Determine the main topic category - optimized for branded slots"""
+        keyword_lower = keyword.lower()
         
+        # Check if this contains both a slot game and a brand
+        is_slot = self.is_slot_game(keyword)
+        brand_found = self.has_brand(keyword)
+        
+        # PRIORITY: Branded slots (e.g., "777 strike betway" -> Branded)
+        if brand_found and is_slot:
+            return 'Branded'
+        
+        # Standard brand check (non-slot branded content)
         if brand_found:
             return 'Branded'
         
-        # Check casino patterns first (more specific)
-        casino_patterns = ['casino', 'aviator', 'jackpot', 'slots', 'spin']
+        # Check if it's a slot game without brand
+        if is_slot:
+            return 'Casino'
+        
+        # Check casino patterns (more specific)
+        casino_patterns = ['casino', 'aviator', 'jackpot', 'spin']
         if any(pattern in keyword_lower for pattern in casino_patterns):
             return 'Casino'
         
@@ -159,19 +235,22 @@ class SemanticKeywordAnalyzer:
         return 'Betting'
     
     def extract_sub_topic(self, keyword: str, main_topic: str) -> str:
-        """Extract the sub-topic based on main topic"""
+        """Extract the sub-topic based on main topic - optimized for branded slots"""
         keyword_lower = keyword.lower()
         
         if main_topic == 'Branded':
-            # Find the specific brand
+            # Find the specific brand (prioritize known brands)
+            known_brands = ['sportybet', 'msport', 'betpawa', 'betway', 'betika', 'powerbet', 'sportingbet']
+            for brand in known_brands:
+                if brand in keyword_lower:
+                    return brand.title()  # Return properly capitalized
+            
+            # Check discovered brand patterns
             for brand in self.brand_patterns:
                 if brand in keyword_lower:
-                    return brand
-            
-            # Check known brands from main_topics
-            for brand in self.main_topics['branded']:
-                if brand in keyword_lower:
-                    return brand
+                    return brand.title()
+                    
+            return 'Unknown Brand'
         
         elif main_topic == 'Sports':
             if any(word in keyword_lower for word in ['football', 'soccer']):
@@ -179,7 +258,10 @@ class SemanticKeywordAnalyzer:
             return 'General'
         
         elif main_topic == 'Casino':
-            if 'aviator' in keyword_lower:
+            # Check if it's a slot game
+            if self.is_slot_game(keyword):
+                return 'Slots'
+            elif 'aviator' in keyword_lower:
                 return 'Crash Games'
             elif any(word in keyword_lower for word in ['jackpot', 'spin']):
                 return 'Slots'
@@ -192,7 +274,7 @@ class SemanticKeywordAnalyzer:
         
         return 'General'
     
-    def semantic_clustering(self, keywords: List[str], n_clusters: int = None) -> Dict[int, List[str]]:
+    def semantic_clustering(self, keywords: List[str], n_clusters: int = 5) -> Dict[int, List[str]]:
         """Group semantically similar keywords using ML"""
         if not keywords:
             return {}
@@ -212,6 +294,9 @@ class SemanticKeywordAnalyzer:
             if n_clusters is None:
                 n_clusters = max(2, min(len(keywords) // 10, 20))
             
+            # Ensure n_clusters doesn't exceed number of keywords
+            n_clusters = min(n_clusters, len(keywords))
+            
             kmeans = KMeans(n_clusters=n_clusters, random_state=42)
             clusters = kmeans.fit_predict(vectors)
             
@@ -224,8 +309,9 @@ class SemanticKeywordAnalyzer:
                 
             return cluster_groups
         
-        except:
+        except Exception as e:
             # Fallback: simple grouping
+            print(f"Warning: Clustering failed: {e}")
             return {0: keywords}
     
     def analyze_keywords(self, keywords: List[str]) -> pd.DataFrame:
