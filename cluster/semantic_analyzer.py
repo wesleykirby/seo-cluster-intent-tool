@@ -353,6 +353,7 @@ class SemanticKeywordAnalyzer:
         results = []
         
         for keyword in keywords:
+<<<<<<< HEAD
             try:
                 # Check if this is a slot game or branded combination
                 is_slot = self.is_slot_game(keyword)
@@ -405,8 +406,37 @@ class SemanticKeywordAnalyzer:
                         'Keyword': keyword
                     })
         
+=======
+            # Get fuzzy intent analysis (understands misspellings)
+            intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
+
+            # Extract the components while preserving original keyword
+            main_topic = intent_analysis['main']
+            sub_topic = intent_analysis['sub']
+            modifier = intent_analysis['modifier']
+
+            main_conf_raw = float(intent_analysis.get('main_confidence') or 0.0)
+            modifier_conf_raw = float(intent_analysis.get('modifier_confidence') or 0.0)
+            # Normalize confidences to the 0-1 range for downstream consumers
+            main_conf = max(0.0, min(1.0, main_conf_raw / 100.0))
+            modifier_conf = max(0.0, min(1.0, modifier_conf_raw / 100.0))
+
+            confidence_components = [value for value in (main_conf, modifier_conf) if value > 0]
+            intent_conf = float(sum(confidence_components) / len(confidence_components)) if confidence_components else main_conf
+
+            results.append({
+                'Main': main_topic,  # Already properly formatted from fuzzy recognizer
+                'Sub': sub_topic,
+                'Mod': modifier,
+                'Keyword': keyword,  # Original keyword preserved!
+                'main_confidence': main_conf,
+                'modifier_confidence': modifier_conf,
+                'intent_conf': intent_conf,
+            })
+
+>>>>>>> f4ea970643a3c2ca31e12b06de7ee7aa69ddc9d9
         df = pd.DataFrame(results)
-        
+
         # Step 3: Add cluster IDs using semantic clustering
         # Group by Main+Sub for more meaningful clusters
         df['cluster_group'] = df['Main'] + '_' + df['Sub']
@@ -424,11 +454,16 @@ class SemanticKeywordAnalyzer:
                 cluster_id += 1
         
         df['Cluster_ID'] = df['Keyword'].map(cluster_map)
-        
+
         # Clean up temporary columns
         df = df.drop(['cluster_group'], axis=1)
+<<<<<<< HEAD
         
         return df[['Main', 'Sub', 'Mod', 'Keyword']]  # Clean 4-column output
+=======
+
+        return df[['Main', 'Sub', 'Mod', 'Keyword', 'Cluster_ID', 'main_confidence', 'modifier_confidence', 'intent_conf']]
+>>>>>>> f4ea970643a3c2ca31e12b06de7ee7aa69ddc9d9
     
     def analyze_keywords_with_urls(self, keyword_url_pairs: List[Tuple[str, str]]) -> pd.DataFrame:
         """
@@ -447,6 +482,7 @@ class SemanticKeywordAnalyzer:
         results = []
         
         for keyword, url in keyword_url_pairs:
+<<<<<<< HEAD
             try:
                 # Check if this is a slot game or branded combination
                 is_slot = self.is_slot_game(keyword)
@@ -480,29 +516,52 @@ class SemanticKeywordAnalyzer:
                     'sub_topic': 'General',
                     'modifier': 'General'
                 }
+=======
+            # Get semantic analysis first
+            intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
+
+            # Convert to format expected by URL analyzer
+            semantic_result = {
+                'main_topic': intent_analysis['main'],
+                'sub_topic': intent_analysis['sub'],
+                'modifier': intent_analysis['modifier']
+            }
+>>>>>>> f4ea970643a3c2ca31e12b06de7ee7aa69ddc9d9
             
+            main_conf_raw = float(intent_analysis.get('main_confidence') or 0.0)
+            modifier_conf_raw = float(intent_analysis.get('modifier_confidence') or 0.0)
+            main_conf = max(0.0, min(1.0, main_conf_raw / 100.0))
+            modifier_conf = max(0.0, min(1.0, modifier_conf_raw / 100.0))
+
+            confidence_components = [value for value in (main_conf, modifier_conf) if value > 0]
+
             # Enhance with URL analysis if URL is provided
             if url and url.strip():
                 enhanced_result = self.url_analyzer.enhance_semantic_classification(
                     keyword, url, semantic_result
                 )
-                
+
                 # Use enhanced results if available
                 main_topic = enhanced_result.get('main_topic', intent_analysis['main'])
                 sub_topic = enhanced_result.get('sub_topic', intent_analysis['sub'])
                 modifier = enhanced_result.get('modifier', intent_analysis['modifier'])
-                
+
                 # Track URL enhancement metadata
                 url_enhanced = enhanced_result.get('url_override', False)
-                url_confidence = enhanced_result.get('url_confidence', 0)
+                url_confidence_raw = float(enhanced_result.get('url_confidence', 0) or 0.0)
+                url_confidence = max(0.0, min(1.0, url_confidence_raw / 100.0 if url_confidence_raw > 1 else url_confidence_raw))
+                if url_confidence > 0:
+                    confidence_components.append(url_confidence)
             else:
                 # Fall back to semantic-only analysis
                 main_topic = intent_analysis['main']
-                sub_topic = intent_analysis['sub']  
+                sub_topic = intent_analysis['sub']
                 modifier = intent_analysis['modifier']
                 url_enhanced = False
-                url_confidence = 0
-            
+                url_confidence = 0.0
+
+            intent_conf = float(sum(confidence_components) / len(confidence_components)) if confidence_components else main_conf
+
             results.append({
                 'Main': main_topic,
                 'Sub': sub_topic,
@@ -510,11 +569,15 @@ class SemanticKeywordAnalyzer:
                 'Keyword': keyword,
                 'URL': url,
                 'URL_Enhanced': url_enhanced,
-                'URL_Confidence': url_confidence
+                'URL_Confidence': url_confidence,
+                'Cluster_ID': None,
+                'main_confidence': main_conf,
+                'modifier_confidence': modifier_conf,
+                'intent_conf': intent_conf,
             })
-        
+
         df = pd.DataFrame(results)
-        
+
         # Add cluster IDs using semantic clustering (same as original method)
         df['cluster_group'] = df['Main'] + '_' + df['Sub']
         cluster_id = 0
@@ -530,9 +593,9 @@ class SemanticKeywordAnalyzer:
                 cluster_id += 1
         
         df['Cluster_ID'] = df['Keyword'].map(cluster_map)
-        
-        # Clean up temporary columns and return same 4-column format
-        return df[['Main', 'Sub', 'Mod', 'Keyword']]
+
+        # Clean up temporary columns and return DataFrame with confidence metadata
+        return df[['Main', 'Sub', 'Mod', 'Keyword', 'URL', 'URL_Enhanced', 'URL_Confidence', 'Cluster_ID', 'main_confidence', 'modifier_confidence', 'intent_conf']]
 
 
 def analyze_keyword_file(csv_path: str) -> pd.DataFrame:
