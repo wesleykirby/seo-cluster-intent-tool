@@ -90,8 +90,8 @@ def run_pipeline(
             keyword_url_pairs.append((keyword, str(url)))
         
         results_df = analyzer.analyze_keywords_with_urls(keyword_url_pairs)
-        # Add flag to indicate URL enhancement was used
-        results_df['URL_Enhanced'] = True
+        if 'URL_Enhanced' not in results_df.columns:
+            results_df['URL_Enhanced'] = True
         print(f"✅ URL-enhanced analysis complete!")
         print(f"   - Used ranking page intelligence from {len([p for p in keyword_url_pairs if p[1]])} URLs")
     else:
@@ -103,22 +103,40 @@ def run_pipeline(
     print(f"   - Discovered {len(analyzer.brand_patterns)} brands automatically")
     print(f"   - Classified into semantic topics and modifiers")
     
+    # Align with active-learning queue expectations
+    if 'Keyword' in results_df.columns and 'keyword' not in results_df.columns:
+        results_df['keyword'] = results_df['Keyword']
+    if 'Cluster_ID' in results_df.columns and 'cluster_id' not in results_df.columns:
+        results_df['cluster_id'] = results_df['Cluster_ID']
+    if 'intent_conf' in results_df.columns:
+        results_df['intent_conf'] = pd.to_numeric(results_df['intent_conf'], errors='coerce').fillna(0.0)
+    else:
+        results_df['intent_conf'] = 0.0
+
+    if 'keyword' in results_df.columns and 'keyword_norm' not in results_df.columns:
+        results_df['keyword_norm'] = results_df['keyword'].astype(str).apply(normalize_kw)
+
+    if all(col in results_df.columns for col in ['Main', 'Sub', 'Mod']):
+        def _compose_intent(row: pd.Series) -> str:
+            parts = [str(row[col]).strip() for col in ('Main', 'Sub', 'Mod') if str(row[col]).strip()]
+            return ' > '.join(parts) if parts else ''
+
+        results_df['intent'] = results_df.apply(_compose_intent, axis=1)
+    elif 'Main' in results_df.columns:
+        results_df['intent'] = results_df['Main'].astype(str)
+
     # Preserve additional columns from original CSV if they exist
     preserve_cols = ['Volume', 'Current position', 'KD', 'CPC', 'Organic traffic']
-    additional_data = {}
-    
+    preserved_cols_in_output: list[str] = []
     for col in preserve_cols:
         if col in df.columns:
-            additional_data[col] = df[col].tolist()
-    
-    # Add preserved columns to results
-    for col, values in additional_data.items():
-        results_df[col] = values
-    
+            results_df[col] = df[col].tolist()
+            preserved_cols_in_output.append(col)
+
     # Save the enhanced output
     results_df.to_csv(csv_out, index=False)
-    
-    preserved_info = f" + {len(additional_data)} SERP metrics" if additional_data else ""
+
+    preserved_info = f" + {len(preserved_cols_in_output)} SERP metrics" if preserved_cols_in_output else ""
     print(f"💾 Results saved to {csv_out}{preserved_info}")
 
 

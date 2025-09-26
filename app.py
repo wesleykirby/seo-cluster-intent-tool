@@ -182,6 +182,49 @@ if submitted:
                 use_container_width=True
             )
 
+        # Active learning queue section
+        if 'intent_conf' in df.columns:
+            low_conf_mask = pd.to_numeric(df['intent_conf'], errors='coerce').fillna(0.0) < active_threshold
+            newly_flagged = int(low_conf_mask.sum())
+            queue_df = update_label_queue(
+                df,
+                threshold=active_threshold,
+                queue_path=DEFAULT_QUEUE_PATH,
+            )
+
+            st.divider()
+            st.subheader("📝 Review low-confidence predictions")
+            st.caption(
+                "Edit the `human_intent` column to override model predictions. "
+                "Changes persist to `data/label_queue.csv`."
+            )
+
+            status_cols = st.columns(3)
+            with status_cols[0]:
+                st.metric("New rows queued", newly_flagged)
+            with status_cols[1]:
+                st.metric("Total queue size", len(queue_df))
+            with status_cols[2]:
+                st.metric("Confidence threshold", active_threshold)
+
+            if st.button("🔄 Reload saved queue", key="reload_queue"):
+                queue_df = load_label_queue(DEFAULT_QUEUE_PATH)
+
+            edited_queue = st.data_editor(
+                queue_df,
+                key="label_queue_editor",
+                num_rows="dynamic",
+                use_container_width=True,
+            )
+
+            if st.button("💾 Save corrections", key="save_queue", type="primary"):
+                save_label_queue(edited_queue, queue_path=DEFAULT_QUEUE_PATH)
+                st.success("Label queue saved. Retraining scripts can now ingest the corrections.")
+        else:
+            st.warning(
+                "The current analysis did not include intent confidence scores, so the label queue could not be updated."
+            )
+
 st.divider()
 
 # Information section
