@@ -353,7 +353,6 @@ class SemanticKeywordAnalyzer:
         results = []
         
         for keyword in keywords:
-<<<<<<< HEAD
             try:
                 # Check if this is a slot game or branded combination
                 is_slot = self.is_slot_game(keyword)
@@ -406,35 +405,6 @@ class SemanticKeywordAnalyzer:
                         'Keyword': keyword
                     })
         
-=======
-            # Get fuzzy intent analysis (understands misspellings)
-            intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
-
-            # Extract the components while preserving original keyword
-            main_topic = intent_analysis['main']
-            sub_topic = intent_analysis['sub']
-            modifier = intent_analysis['modifier']
-
-            main_conf_raw = float(intent_analysis.get('main_confidence') or 0.0)
-            modifier_conf_raw = float(intent_analysis.get('modifier_confidence') or 0.0)
-            # Normalize confidences to the 0-1 range for downstream consumers
-            main_conf = max(0.0, min(1.0, main_conf_raw / 100.0))
-            modifier_conf = max(0.0, min(1.0, modifier_conf_raw / 100.0))
-
-            confidence_components = [value for value in (main_conf, modifier_conf) if value > 0]
-            intent_conf = float(sum(confidence_components) / len(confidence_components)) if confidence_components else main_conf
-
-            results.append({
-                'Main': main_topic,  # Already properly formatted from fuzzy recognizer
-                'Sub': sub_topic,
-                'Mod': modifier,
-                'Keyword': keyword,  # Original keyword preserved!
-                'main_confidence': main_conf,
-                'modifier_confidence': modifier_conf,
-                'intent_conf': intent_conf,
-            })
-
->>>>>>> f4ea970643a3c2ca31e12b06de7ee7aa69ddc9d9
         df = pd.DataFrame(results)
 
         # Step 3: Add cluster IDs using semantic clustering
@@ -457,13 +427,8 @@ class SemanticKeywordAnalyzer:
 
         # Clean up temporary columns
         df = df.drop(['cluster_group'], axis=1)
-<<<<<<< HEAD
         
         return df[['Main', 'Sub', 'Mod', 'Keyword']]  # Clean 4-column output
-=======
-
-        return df[['Main', 'Sub', 'Mod', 'Keyword', 'Cluster_ID', 'main_confidence', 'modifier_confidence', 'intent_conf']]
->>>>>>> f4ea970643a3c2ca31e12b06de7ee7aa69ddc9d9
     
     def analyze_keywords_with_urls(self, keyword_url_pairs: List[Tuple[str, str]]) -> pd.DataFrame:
         """
@@ -482,7 +447,9 @@ class SemanticKeywordAnalyzer:
         results = []
         
         for keyword, url in keyword_url_pairs:
-<<<<<<< HEAD
+            # Initialize default intent_analysis to avoid unbound errors
+            intent_analysis = {'main': 'Betting', 'sub': 'General', 'modifier': 'General', 'main_confidence': 0.0, 'modifier_confidence': 0.0}
+            
             try:
                 # Check if this is a slot game or branded combination
                 is_slot = self.is_slot_game(keyword)
@@ -499,6 +466,8 @@ class SemanticKeywordAnalyzer:
                         'sub_topic': sub_topic,
                         'modifier': modifier
                     }
+                    # Update intent_analysis for consistency
+                    intent_analysis = {'main': main_topic, 'sub': sub_topic, 'modifier': modifier, 'main_confidence': 80.0, 'modifier_confidence': 80.0}
                 else:
                     # Fall back to fuzzy recognizer for other keywords
                     intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
@@ -516,17 +485,7 @@ class SemanticKeywordAnalyzer:
                     'sub_topic': 'General',
                     'modifier': 'General'
                 }
-=======
-            # Get semantic analysis first
-            intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
-
-            # Convert to format expected by URL analyzer
-            semantic_result = {
-                'main_topic': intent_analysis['main'],
-                'sub_topic': intent_analysis['sub'],
-                'modifier': intent_analysis['modifier']
-            }
->>>>>>> f4ea970643a3c2ca31e12b06de7ee7aa69ddc9d9
+                intent_analysis = {'main': 'Betting', 'sub': 'General', 'modifier': 'General', 'main_confidence': 0.0, 'modifier_confidence': 0.0}
             
             main_conf_raw = float(intent_analysis.get('main_confidence') or 0.0)
             modifier_conf_raw = float(intent_analysis.get('modifier_confidence') or 0.0)
