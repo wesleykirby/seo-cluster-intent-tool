@@ -368,26 +368,36 @@ col1, col2 = st.columns(2)
 with col1:
     if st.button("🔄 Trigger Immediate Retraining", help="Retrain the model with current training data"):
         try:
-            from scripts.weekly_retrain import run_retraining
+            from scripts.weekly_retrain import run_retraining, load_training_data, DEFAULT_TRAINING_PATH
             
-            with st.spinner("🧠 Retraining model with updated data..."):
+            with st.spinner("🧠 Retraining model with current training data..."):
                 results = run_retraining()
             
-            st.success("✅ **Model retrained successfully!**")
-            
-            # Show retraining results
-            if results['before_f1'] is not None and results['after_f1'] is not None:
-                improvement = results['after_f1'] - results['before_f1']
-                st.write(f"**Performance change:** {improvement:+.3f} F1 score")
+            # Check if retraining actually occurred or was skipped
+            if results['added_rows'] == 0 and results['evaluated_rows'] == 0:
+                # No new labels from queue, but we might have training data
+                training_data = load_training_data(DEFAULT_TRAINING_PATH)
+                if not training_data.empty:
+                    st.warning("⚠️ **Retraining was skipped** - No new labels in the review queue. The weekly retraining process only runs when there are new human-labeled keywords from the active learning queue.")
+                    st.info("💡 **Tip:** The model will automatically retrain weekly when new labels are added through the active learning process, or upload keywords that need human review to trigger retraining.")
+                else:
+                    st.warning("⚠️ **No training data available** - Upload some labeled training data first, then try retraining.")
+            else:
+                st.success("✅ **Model retrained successfully!**")
                 
-                col_before, col_after = st.columns(2)
-                with col_before:
-                    st.metric("Before F1", f"{results['before_f1']:.3f}")
-                with col_after:
-                    st.metric("After F1", f"{results['after_f1']:.3f}")
-            
-            st.write(f"**Evaluated on:** {results['evaluated_rows']} keywords")
-            st.write(f"**Added to training:** {results['added_rows']} new labels")
+                # Show retraining results
+                if results['before_f1'] is not None and results['after_f1'] is not None:
+                    improvement = results['after_f1'] - results['before_f1']
+                    st.write(f"**Performance change:** {improvement:+.3f} F1 score")
+                    
+                    col_before, col_after = st.columns(2)
+                    with col_before:
+                        st.metric("Before F1", f"{results['before_f1']:.3f}")
+                    with col_after:
+                        st.metric("After F1", f"{results['after_f1']:.3f}")
+                
+                st.write(f"**Evaluated on:** {results['evaluated_rows']} keywords")
+                st.write(f"**Added to training:** {results['added_rows']} new labels")
             
         except Exception as e:
             st.error(f"❌ Error during retraining: {str(e)}")
