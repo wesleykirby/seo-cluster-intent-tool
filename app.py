@@ -204,3 +204,193 @@ with col2:
     st.write("• **Keyword**: Your original search term")
 
 st.info("💡 **Pro Tip**: The 'Modifier' column reveals the true user intent - Login (access), App (mobile), Ghana (geo-targeting), etc. This is perfect for SEO content strategy!")
+
+st.divider()
+
+# Training Data Management Section
+st.subheader("📚 Training Data Management")
+st.write("Upload labeled training data to continuously improve the model's accuracy. This helps the system learn new keywords, brands, and patterns.")
+
+# Create tabs for different training functions
+train_tab1, train_tab2 = st.tabs(["📤 Upload Training Data", "📊 Training Status"])
+
+with train_tab1:
+    st.write("**Upload labeled keywords to expand the model's knowledge base:**")
+    
+    # Training data uploader
+    training_file = st.file_uploader(
+        "Upload training CSV", 
+        type=["csv"], 
+        key="training_upload",
+        help="CSV should contain columns: 'keyword' and 'intent'. Supported intents: transactional, informational, commercial, navigational"
+    )
+    
+    # Show expected format
+    st.write("**Expected format:**")
+    sample_training_data = pd.DataFrame({
+        'keyword': ['betway register bonus', 'football betting tips', 'odds comparison'],
+        'intent': ['transactional', 'informational', 'commercial']
+    })
+    st.dataframe(sample_training_data, use_container_width=True)
+    
+    if training_file is not None:
+        try:
+            # Preview training data
+            train_df = pd.read_csv(training_file)
+            st.success(f"✅ **Training file loaded!** Found {len(train_df)} labeled keywords")
+            
+            # Validate required columns
+            required_cols = ['keyword', 'intent']
+            missing_cols = [col for col in required_cols if col not in train_df.columns]
+            
+            if missing_cols:
+                st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+            else:
+                # Show preview
+                st.write("**Preview of uploaded training data:**")
+                st.dataframe(train_df.head(10), use_container_width=True)
+                
+                # Show intent distribution
+                intent_counts = train_df['intent'].value_counts()
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("**Intent Distribution:**")
+                    for intent, count in intent_counts.items():
+                        st.write(f"• {intent}: {count} keywords")
+                
+                with col2:
+                    st.write("**Keywords by Intent:**")
+                    total_keywords = len(train_df)
+                    for intent, count in intent_counts.items():
+                        percentage = (count / total_keywords) * 100
+                        st.progress(percentage / 100, text=f"{intent}: {percentage:.1f}%")
+                
+                # Add to training data button
+                if st.button("📚 Add to Training Data", type="primary", key="add_training"):
+                    try:
+                        # Import the retraining script function
+                        import sys
+                        from pathlib import Path
+                        
+                        # Add the scripts directory to path
+                        scripts_path = Path("scripts")
+                        if str(scripts_path) not in sys.path:
+                            sys.path.append(str(scripts_path))
+                        
+                        from scripts.weekly_retrain import DEFAULT_TRAINING_PATH, load_training_data
+                        
+                        # Load existing training data
+                        existing_data = load_training_data(DEFAULT_TRAINING_PATH)
+                        
+                        # Combine with new data
+                        combined_data = pd.concat([existing_data, train_df], ignore_index=True)
+                        
+                        # Remove duplicates (keep latest)
+                        combined_data = combined_data.drop_duplicates(subset=['keyword'], keep='last')
+                        
+                        # Save updated training data
+                        combined_data.to_csv(DEFAULT_TRAINING_PATH, index=False)
+                        
+                        st.success(f"🎉 **Training data updated!** Added {len(train_df)} new keywords. Total training data now contains {len(combined_data)} keywords.")
+                        
+                        # Show updated stats
+                        new_intent_counts = combined_data['intent'].value_counts()
+                        st.write("**Updated training data distribution:**")
+                        for intent, count in new_intent_counts.items():
+                            st.write(f"• {intent}: {count} keywords")
+                            
+                    except Exception as e:
+                        st.error(f"❌ Error adding training data: {str(e)}")
+                        
+        except Exception as e:
+            st.error(f"❌ Error reading training file: {str(e)}")
+
+with train_tab2:
+    st.write("**Current training data statistics:**")
+    
+    try:
+        from scripts.weekly_retrain import DEFAULT_TRAINING_PATH, load_training_data
+        
+        # Load current training data
+        current_training = load_training_data(DEFAULT_TRAINING_PATH)
+        
+        if current_training.empty:
+            st.info("No training data found. Upload some labeled keywords to get started!")
+        else:
+            # Show overall stats
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Total Keywords", len(current_training))
+            
+            with col2:
+                unique_intents = current_training['intent'].nunique()
+                st.metric("Intent Categories", unique_intents)
+            
+            with col3:
+                # Calculate average keywords per intent
+                avg_per_intent = len(current_training) / unique_intents if unique_intents > 0 else 0
+                st.metric("Avg Keywords/Intent", f"{avg_per_intent:.1f}")
+            
+            # Show intent breakdown
+            st.write("**Training data by intent:**")
+            intent_breakdown = current_training['intent'].value_counts()
+            
+            # Create a nice chart
+            chart_data = pd.DataFrame({
+                'Intent': intent_breakdown.index,
+                'Count': intent_breakdown.values
+            })
+            st.bar_chart(chart_data.set_index('Intent'))
+            
+            # Show recent additions (if we can determine them)
+            st.write("**Sample training keywords:**")
+            sample_data = current_training.sample(min(10, len(current_training)))
+            st.dataframe(sample_data, use_container_width=True)
+            
+            # Download current training data
+            csv_data = current_training.to_csv(index=False)
+            st.download_button(
+                "📥 Download Current Training Data",
+                data=csv_data,
+                file_name="current_training_data.csv",
+                mime="text/csv"
+            )
+            
+    except Exception as e:
+        st.error(f"❌ Error loading training data: {str(e)}")
+
+# Option to trigger retraining
+st.write("**Model Retraining:**")
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("🔄 Trigger Immediate Retraining", help="Retrain the model with current training data"):
+        try:
+            from scripts.weekly_retrain import run_retraining
+            
+            with st.spinner("🧠 Retraining model with updated data..."):
+                results = run_retraining()
+            
+            st.success("✅ **Model retrained successfully!**")
+            
+            # Show retraining results
+            if results['before_f1'] is not None and results['after_f1'] is not None:
+                improvement = results['after_f1'] - results['before_f1']
+                st.write(f"**Performance change:** {improvement:+.3f} F1 score")
+                
+                col_before, col_after = st.columns(2)
+                with col_before:
+                    st.metric("Before F1", f"{results['before_f1']:.3f}")
+                with col_after:
+                    st.metric("After F1", f"{results['after_f1']:.3f}")
+            
+            st.write(f"**Evaluated on:** {results['evaluated_rows']} keywords")
+            st.write(f"**Added to training:** {results['added_rows']} new labels")
+            
+        except Exception as e:
+            st.error(f"❌ Error during retraining: {str(e)}")
+
+with col2:
+    st.info("🗓️ **Automatic retraining** runs weekly on Sundays at 2:00 AM, incorporating new labels from the review queue.")
