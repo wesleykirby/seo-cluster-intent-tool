@@ -11,6 +11,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from .fuzzy_intent import FuzzyIntentRecognizer
 from .url_intent_analyzer import UrlIntentAnalyzer
+from .vector_semantic_learner import VectorSemanticLearner
 
 class SemanticKeywordAnalyzer:
     def __init__(self):
@@ -20,7 +21,10 @@ class SemanticKeywordAnalyzer:
         # Initialize URL intent analyzer for enhanced classification
         self.url_analyzer = UrlIntentAnalyzer()
         
-        # Brand patterns - will be discovered from data  
+        # Initialize vector-based semantic learner for advanced ML-driven analysis
+        self.vector_learner = VectorSemanticLearner()
+        
+        # Brand patterns - will be discovered from data + enhanced with learned patterns
         self.brand_patterns = set()
         
         # Load slots games for enhanced recognition
@@ -43,13 +47,87 @@ class SemanticKeywordAnalyzer:
             'games': ['games', 'casino', 'slots']
         }
         
-        # Main topic categories
+        # Main topic categories (enhanced with learned patterns)
         self.main_topics = {
             'branded': ['sportybet', 'msport', 'betpawa', 'betway', 'betika', 'powerbet', 'sportingbet'],
             'betting': ['bet', 'betting', 'odds', 'wager', 'stake'],
             'sports': ['football', 'soccer', 'sport', 'srl', 'league'],
             'casino': ['casino', 'aviator', 'jackpot', 'slots', 'games', 'spin']
         }
+        
+        # Enhanced brand patterns from vector learner (must be AFTER main_topics is defined)
+        self._load_learned_patterns()
+    
+    def _load_learned_patterns(self):
+        """Load learned brands and patterns from the vector learner to enhance analysis."""
+        try:
+            # Get learned brands from vector learner
+            if hasattr(self.vector_learner, 'learned_brands'):
+                self.brand_patterns.update(self.vector_learner.learned_brands)
+                
+                # Enhance main_topics with learned brands
+                if self.vector_learner.learned_brands:
+                    # Add learned brands to the branded category
+                    learned_brand_names = [brand.lower() for brand in self.vector_learner.learned_brands]
+                    self.main_topics['branded'].extend(learned_brand_names)
+                    
+                    print(f"[SemanticAnalyzer] Enhanced with {len(self.vector_learner.learned_brands)} learned brands")
+                
+            # Enhance intent patterns with learned semantic patterns
+            if hasattr(self.vector_learner, 'learned_patterns'):
+                for term, pattern_data in self.vector_learner.learned_patterns.items():
+                    # Use learned patterns to enhance intent recognition
+                    if pattern_data.get('modifier_counts'):
+                        most_common_modifier = max(pattern_data['modifier_counts'], 
+                                                 key=pattern_data['modifier_counts'].get)
+                        
+                        # Map learned modifiers to intent patterns
+                        modifier_lower = most_common_modifier.lower()
+                        if modifier_lower not in self.intent_patterns:
+                            self.intent_patterns[modifier_lower] = []
+                        
+                        if term not in self.intent_patterns[modifier_lower]:
+                            self.intent_patterns[modifier_lower].append(term)
+                            
+                print(f"[SemanticAnalyzer] Enhanced with {len(self.vector_learner.learned_patterns)} learned patterns")
+                
+        except Exception as e:
+            print(f"[SemanticAnalyzer] Warning: Could not load learned patterns: {e}")
+    
+    def _get_vector_prediction(self, keyword: str) -> Dict:
+        """
+        Get prediction from vector-based semantic learner.
+        Returns enhanced prediction with confidence scores.
+        """
+        try:
+            predictions = self.vector_learner.predict([keyword])
+            if predictions:
+                prediction = predictions[0]
+                
+                # Enhance with pattern-based insights
+                enhancements = self.vector_learner.enhance_with_patterns(keyword)
+                
+                # Combine vector prediction with pattern enhancements
+                result = {
+                    'main_topic': prediction['main_topic'],
+                    'sub_topic': prediction['sub_topic'], 
+                    'modifier': prediction['modifier'],
+                    'confidence': prediction['confidence'],
+                    'vector_based': True,
+                    'brand_detected': enhancements.get('brand_detected'),
+                    'pattern_matches': enhancements.get('pattern_matches', []),
+                    'confidence_boost': enhancements.get('confidence_boost', 0.0)
+                }
+                
+                # Boost confidence if we have pattern matches
+                result['confidence'] = min(1.0, result['confidence'] + result['confidence_boost'])
+                
+                return result
+                
+        except Exception as e:
+            print(f"[SemanticAnalyzer] Warning: Vector prediction failed for '{keyword}': {e}")
+        
+        return None
     
     def load_slots_games(self):
         """Load slots games from the training data for enhanced recognition"""
@@ -343,17 +421,34 @@ class SemanticKeywordAnalyzer:
     def analyze_keywords(self, keywords: List[str]) -> pd.DataFrame:
         """
         Main analysis function - converts keywords to 4-column structure
-        Now with enhanced slot game recognition and branded slot optimization!
+        Now with VECTOR-BASED LEARNING + enhanced slot game recognition and branded slot optimization!
         """
         
-        # Step 1: Discover brands from the data (traditional method)
+        # Step 1: Discover brands from the data (traditional method + learned patterns)
         self.discover_brands(keywords)
         
-        # Step 2: Use enhanced semantic analysis for each keyword
+        # Step 2: Use vector-based semantic analysis when possible, fall back to rule-based
         results = []
+        vector_used_count = 0
         
         for keyword in keywords:
             try:
+                # ⭐ FIRST: Try vector-based prediction (the new ML-powered approach)
+                vector_prediction = self._get_vector_prediction(keyword)
+                
+                if vector_prediction and vector_prediction['confidence'] >= 0.6:  # High confidence threshold
+                    # Use vector-based prediction - this is the new ML learning!
+                    results.append({
+                        'Main': vector_prediction['main_topic'],
+                        'Sub': vector_prediction['sub_topic'],
+                        'Mod': vector_prediction['modifier'],
+                        'Keyword': keyword
+                    })
+                    vector_used_count += 1
+                    continue
+                
+                # FALLBACK: If vector prediction isn't confident, use existing rule-based methods
+                
                 # Check if this is a slot game or branded combination
                 is_slot = self.is_slot_game(keyword)
                 has_brand = self.has_brand(keyword)
@@ -364,6 +459,14 @@ class SemanticKeywordAnalyzer:
                     sub_topic = self.extract_sub_topic(keyword, main_topic)
                     modifier = self.extract_modifier(keyword)
                     
+                    # If we have a low-confidence vector prediction, blend it with rule-based
+                    if vector_prediction and vector_prediction['confidence'] > 0.3:
+                        # Blend vector and rule-based predictions for better accuracy
+                        if vector_prediction['brand_detected']:
+                            sub_topic = vector_prediction['sub_topic']  # Trust vector for brand detection
+                        if vector_prediction['pattern_matches']:
+                            modifier = vector_prediction['modifier']   # Trust vector for modifier patterns
+                    
                     results.append({
                         'Main': main_topic,
                         'Sub': sub_topic,
@@ -371,13 +474,26 @@ class SemanticKeywordAnalyzer:
                         'Keyword': keyword
                     })
                 else:
-                    # Fall back to fuzzy recognizer for other keywords
+                    # Use fuzzy recognizer + potentially blend with vector
                     intent_analysis = self.fuzzy_recognizer.analyze_intent(keyword, self.brand_patterns)
                     
+                    # Blend vector prediction if available
+                    main = intent_analysis['main']
+                    sub = intent_analysis['sub']
+                    modifier = intent_analysis['modifier']
+                    
+                    if vector_prediction and vector_prediction['confidence'] > 0.3:
+                        # Selectively use vector predictions where it's more confident
+                        if vector_prediction['brand_detected']:
+                            main = 'Branded'
+                            sub = vector_prediction['sub_topic']
+                        if len(vector_prediction['pattern_matches']) > 0:
+                            modifier = vector_prediction['modifier']
+                    
                     results.append({
-                        'Main': intent_analysis['main'],
-                        'Sub': intent_analysis['sub'],
-                        'Mod': intent_analysis['modifier'],
+                        'Main': main,
+                        'Sub': sub,
+                        'Mod': modifier,
                         'Keyword': keyword
                     })
                     
@@ -427,6 +543,14 @@ class SemanticKeywordAnalyzer:
 
         # Clean up temporary columns
         df = df.drop(['cluster_group'], axis=1)
+        
+        # Log vector learning usage for transparency
+        if vector_used_count > 0:
+            vector_percentage = (vector_used_count / len(keywords)) * 100
+            print(f"🧠 Vector Learning: {vector_used_count}/{len(keywords)} keywords ({vector_percentage:.1f}%) analyzed using trained ML model")
+            print(f"📈 System is learning from your training data and getting smarter!")
+        else:
+            print(f"📝 Used rule-based analysis for {len(keywords)} keywords (no trained ML model available yet)")
         
         return df[['Main', 'Sub', 'Mod', 'Keyword']]  # Clean 4-column output
     

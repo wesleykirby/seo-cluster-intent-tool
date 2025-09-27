@@ -11,7 +11,7 @@ from typing import Dict, Optional, Union
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
 
 from cluster.active_learning import DEFAULT_QUEUE_PATH, load_label_queue
 from cluster.pipeline import normalize_kw
+from cluster.vector_semantic_learner import VectorSemanticLearner
 
 DEFAULT_TRAINING_PATH = Path("data/training_data.csv")
 
@@ -41,11 +42,33 @@ def _ensure_keyword_norm(df: pd.DataFrame) -> pd.DataFrame:
 def load_training_data(path: Path = DEFAULT_TRAINING_PATH) -> pd.DataFrame:
     if not path.exists():
         print(f"[weekly_retrain] No training data found at {path}. Starting fresh.")
-        return pd.DataFrame(columns=["keyword", "intent"])
+        # Return both old and new format columns for compatibility
+        return pd.DataFrame(columns=["keyword", "intent", "main_topic", "sub_topic", "modifier"])
     df = pd.read_csv(path)
-    missing = {"keyword", "intent"} - set(df.columns)
-    if missing:
-        raise ValueError(f"Training data is missing required columns: {missing}")
+    
+    # Support both old format (keyword,intent) and new format (keyword,main_topic,sub_topic,modifier)
+    if "main_topic" in df.columns and "sub_topic" in df.columns and "modifier" in df.columns:
+        # New enhanced format - validate required columns
+        required_cols = {"keyword", "main_topic", "sub_topic", "modifier"}
+        missing = required_cols - set(df.columns)
+        if missing:
+            raise ValueError(f"Enhanced training data is missing required columns: {missing}")
+        # Add intent column for backward compatibility if not present
+        if "intent" not in df.columns:
+            df["intent"] = "semantic"  # Placeholder for legacy compatibility
+    else:
+        # Legacy format - validate old required columns
+        missing = {"keyword", "intent"} - set(df.columns)
+        if missing:
+            raise ValueError(f"Training data is missing required columns: {missing}")
+        # Add new columns with default values for compatibility
+        if "main_topic" not in df.columns:
+            df["main_topic"] = "Betting"
+        if "sub_topic" not in df.columns:
+            df["sub_topic"] = "General"
+        if "modifier" not in df.columns:
+            df["modifier"] = "General"
+    
     return df
 
 
@@ -63,6 +86,7 @@ def load_new_labels(queue_path: Path = DEFAULT_QUEUE_PATH) -> pd.DataFrame:
 
 
 def build_model() -> Pipeline:
+    """Legacy model builder for backward compatibility with old intent classification."""
     return Pipeline(
         [
             ("tfidf", TfidfVectorizer(ngram_range=(1, 2))),
@@ -72,6 +96,92 @@ def build_model() -> Pipeline:
             ),
         ]
     )
+
+
+def train_vector_semantic_model(training_df: pd.DataFrame) -> Dict[str, Union[None, float, int]]:
+    """
+    Train the enhanced vector-based semantic model.
+    This function trains on the full semantic structure (Main/Sub/Mod) instead of just basic intent.
+    """
+    # Initialize the vector semantic learner
+    learner = VectorSemanticLearner()
+    
+    # Check if we have enhanced training data
+    if "main_topic" in training_df.columns and "sub_topic" in training_df.columns and "modifier" in training_df.columns:
+        print("[weekly_retrain] Training enhanced vector-based semantic model...")
+        
+        # Train on the full semantic structure
+        results = learner.train(training_df)
+        
+        if results['status'] == 'success':
+            print(f"[weekly_retrain] Vector semantic model trained successfully!")
+            print(f"  - Main Topic Accuracy: {results['main_topic_accuracy']:.3f}")
+            print(f"  - Sub Topic Accuracy: {results['sub_topic_accuracy']:.3f}")
+            print(f"  - Modifier Accuracy: {results['modifier_accuracy']:.3f}")
+            print(f"  - Learned {results['learned_brands']} brands from training data")
+            print(f"  - Discovered {results['learned_patterns']} semantic patterns")
+            
+            return {
+                "vector_training_status": "success",
+                "main_accuracy": results['main_topic_accuracy'],
+                "sub_accuracy": results['sub_topic_accuracy'],
+                "modifier_accuracy": results['modifier_accuracy'],
+                "learned_brands": results['learned_brands'],
+                "learned_patterns": results['learned_patterns'],
+                "training_samples": results['training_samples']
+            }
+        else:
+            print(f"[weekly_retrain] Vector semantic training failed: {results.get('reason', 'Unknown error')}")
+            return {"vector_training_status": "failed", "reason": results.get('reason', 'Unknown error')}
+    else:
+        print("[weekly_retrain] No enhanced training data found (missing main_topic/sub_topic/modifier columns)")
+        print("[weekly_retrain] Skipping vector semantic model training")
+        return {"vector_training_status": "skipped", "reason": "No enhanced training data"}
+
+
+def evaluate_enhanced_model(train_df: pd.DataFrame, eval_df: pd.DataFrame) -> Optional[Dict[str, float]]:
+    """
+    Evaluate the enhanced vector-based semantic model.
+    Returns accuracy scores for each semantic component.
+    """
+    if train_df.empty or eval_df.empty:
+        return None
+    
+    # Check if we have enhanced training data
+    required_cols = ["main_topic", "sub_topic", "modifier"]
+    if not all(col in train_df.columns and col in eval_df.columns for col in required_cols):
+        return None
+    
+    # Train temporary model for evaluation
+    learner = VectorSemanticLearner()
+    train_results = learner.train(train_df)
+    
+    if train_results['status'] != 'success':
+        return None
+    
+    # Predict on evaluation set
+    keywords = eval_df['keyword'].astype(str).tolist()
+    predictions = learner.predict(keywords)
+    
+    # Calculate accuracies
+    y_true_main = eval_df['main_topic'].tolist()
+    y_true_sub = eval_df['sub_topic'].tolist()
+    y_true_mod = eval_df['modifier'].tolist()
+    
+    y_pred_main = [pred['main_topic'] for pred in predictions]
+    y_pred_sub = [pred['sub_topic'] for pred in predictions]
+    y_pred_mod = [pred['modifier'] for pred in predictions]
+    
+    main_acc = accuracy_score(y_true_main, y_pred_main)
+    sub_acc = accuracy_score(y_true_sub, y_pred_sub)
+    mod_acc = accuracy_score(y_true_mod, y_pred_mod)
+    
+    return {
+        "main_accuracy": main_acc,
+        "sub_accuracy": sub_acc,
+        "modifier_accuracy": mod_acc,
+        "average_accuracy": (main_acc + sub_acc + mod_acc) / 3
+    }
 
 
 def _feature_column(df: pd.DataFrame) -> pd.Series:
@@ -110,43 +220,88 @@ def run_retraining(
     base_data = _ensure_keyword_norm(load_training_data(training_path))
     new_labels = _ensure_keyword_norm(load_new_labels(queue_path))
 
-    if new_labels.empty:
-        print("[weekly_retrain] No newly labeled keywords found. Skipping retraining.")
-        return {"before_f1": None, "after_f1": None, "evaluated_rows": 0, "added_rows": 0}
+    # Check if we have any training data (new labels OR existing enhanced data)
+    has_enhanced_data = "main_topic" in base_data.columns and not base_data.empty
+    has_new_labels = not new_labels.empty
+    
+    if not has_new_labels and not has_enhanced_data:
+        print("[weekly_retrain] No training data found. Skipping retraining.")
+        return {"before_f1": None, "after_f1": None, "evaluated_rows": 0, "added_rows": 0, "vector_training_status": "skipped"}
 
-    train_new, eval_new = _split_new_labels(new_labels, holdout_ratio)
-    evaluation_set = eval_new if not eval_new.empty else new_labels
+    # Initialize results dictionary
+    results = {"vector_training_status": "skipped", "vector_stats": {}}
 
-    before_score = evaluate_model(base_data, evaluation_set)
+    # If we have enhanced training data, train the vector-based semantic model
+    if has_enhanced_data:
+        print("[weekly_retrain] Enhanced training data detected - training vector-based semantic model")
+        vector_results = train_vector_semantic_model(base_data)
+        results.update(vector_results)
+        results["vector_stats"] = vector_results
 
-    augmented_training = pd.concat([base_data, train_new], ignore_index=True)
-    if augmented_training.empty:
-        augmented_training = evaluation_set.copy()
-    augmented_training = _ensure_keyword_norm(augmented_training)
-    after_score = evaluate_model(augmented_training, evaluation_set)
+    # Legacy intent classification training (for backward compatibility)
+    if has_new_labels:
+        print("[weekly_retrain] Processing new labels with legacy intent classification")
+        train_new, eval_new = _split_new_labels(new_labels, holdout_ratio)
+        evaluation_set = eval_new if not eval_new.empty else new_labels
 
-    updated_training = pd.concat([base_data, new_labels], ignore_index=True)
-    if not updated_training.empty:
-        updated_training = _ensure_keyword_norm(updated_training)
-        updated_training = updated_training.drop_duplicates(subset=["keyword_norm", "intent"], keep="last")
-        updated_training.to_csv(training_path, index=False)
+        before_score = evaluate_model(base_data, evaluation_set)
 
-    if before_score is None:
-        print("[weekly_retrain] Before retraining F1: n/a")
+        augmented_training = pd.concat([base_data, train_new], ignore_index=True)
+        if augmented_training.empty:
+            augmented_training = evaluation_set.copy()
+        augmented_training = _ensure_keyword_norm(augmented_training)
+        after_score = evaluate_model(augmented_training, evaluation_set)
+
+        # Save updated training data
+        updated_training = pd.concat([base_data, new_labels], ignore_index=True)
+        if not updated_training.empty:
+            updated_training = _ensure_keyword_norm(updated_training)
+            # Drop duplicates based on available columns
+            if "main_topic" in updated_training.columns:
+                # Enhanced format - use semantic deduplication
+                updated_training = updated_training.drop_duplicates(subset=["keyword_norm"], keep="last")
+            else:
+                # Legacy format - use intent deduplication
+                updated_training = updated_training.drop_duplicates(subset=["keyword_norm", "intent"], keep="last")
+            updated_training.to_csv(training_path, index=False)
+
+        # Update results with legacy training metrics
+        results.update({
+            "before_f1": before_score,
+            "after_f1": after_score,
+            "evaluated_rows": len(evaluation_set),
+            "added_rows": len(new_labels),
+        })
+
+        # Enhanced evaluation if we have the right data
+        enhanced_eval = evaluate_enhanced_model(augmented_training, evaluation_set)
+        if enhanced_eval:
+            results["enhanced_evaluation"] = enhanced_eval
+            print(f"[weekly_retrain] Enhanced model evaluation:")
+            print(f"  - Main Topic Accuracy: {enhanced_eval['main_accuracy']:.3f}")
+            print(f"  - Sub Topic Accuracy: {enhanced_eval['sub_accuracy']:.3f}")
+            print(f"  - Modifier Accuracy: {enhanced_eval['modifier_accuracy']:.3f}")
+
+        if before_score is None:
+            print("[weekly_retrain] Before retraining F1: n/a")
+        else:
+            print(f"[weekly_retrain] Before retraining F1: {before_score:.3f}")
+        if after_score is None:
+            print("[weekly_retrain] After retraining F1: n/a")
+        else:
+            print(f"[weekly_retrain] After retraining F1: {after_score:.3f}")
+        print(f"[weekly_retrain] Evaluated on {len(evaluation_set)} labeled keywords.")
     else:
-        print(f"[weekly_retrain] Before retraining F1: {before_score:.3f}")
-    if after_score is None:
-        print("[weekly_retrain] After retraining F1: n/a")
-    else:
-        print(f"[weekly_retrain] After retraining F1: {after_score:.3f}")
-    print(f"[weekly_retrain] Evaluated on {len(evaluation_set)} labeled keywords.")
+        # No new labels, but we have enhanced data - just train the vector model
+        results.update({
+            "before_f1": None,
+            "after_f1": None,
+            "evaluated_rows": 0,
+            "added_rows": 0,
+        })
+        print("[weekly_retrain] No new labels to process, but vector-based semantic model was updated")
 
-    return {
-        "before_f1": before_score,
-        "after_f1": after_score,
-        "evaluated_rows": len(evaluation_set),
-        "added_rows": len(new_labels),
-    }
+    return results
 
 
 def _compute_next_run(run_day: str, run_time: str) -> datetime:

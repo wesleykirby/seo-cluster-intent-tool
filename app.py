@@ -215,23 +215,73 @@ st.write("Upload labeled training data to continuously improve the model's accur
 train_tab1, train_tab2 = st.tabs(["📤 Upload Training Data", "📊 Training Status"])
 
 with train_tab1:
-    st.write("**Upload labeled keywords to expand the model's knowledge base:**")
+    st.write("**Upload enhanced training data to improve the vector-based semantic model:**")
+    
+    # Show format options
+    format_option = st.selectbox(
+        "Training data format:",
+        ["Enhanced (Main/Sub/Modifier)", "Legacy (Intent only)"],
+        help="Enhanced format trains the sophisticated semantic analyzer. Legacy format only trains basic intent classification."
+    )
     
     # Training data uploader
     training_file = st.file_uploader(
         "Upload training CSV", 
         type=["csv"], 
         key="training_upload",
-        help="CSV should contain columns: 'keyword' and 'intent'. Supported intents: transactional, informational, commercial, navigational"
+        help=("Enhanced format: 'keyword', 'main_topic', 'sub_topic', 'modifier' columns. " +
+              "Legacy format: 'keyword', 'intent' columns.")
     )
     
-    # Show expected format
-    st.write("**Expected format:**")
-    sample_training_data = pd.DataFrame({
-        'keyword': ['betway register bonus', 'football betting tips', 'odds comparison'],
-        'intent': ['transactional', 'informational', 'commercial']
-    })
-    st.dataframe(sample_training_data, use_container_width=True)
+    # Show expected format based on selection
+    if format_option == "Enhanced (Main/Sub/Modifier)":
+        st.write("**🚀 Enhanced Format (Recommended):**")
+        st.info("💡 This format trains the full semantic analyzer with Main Topic, Sub Topic, and Modifier prediction!")
+        
+        sample_training_data = pd.DataFrame({
+            'keyword': ['betway register bonus', 'sportybet app download', 'football betting tips', 'aviator game crash'],
+            'main_topic': ['Branded', 'Branded', 'Sports', 'Casino'],
+            'sub_topic': ['Betway', 'SportyBet', 'Football', 'Aviator'],
+            'modifier': ['Registration', 'App', 'Tips', 'Game']
+        })
+        st.dataframe(sample_training_data, use_container_width=True)
+        
+        # Show supported categories
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.write("**Main Topics:**")
+            st.write("• Branded")
+            st.write("• Sports") 
+            st.write("• Casino")
+            st.write("• Lottery")
+            st.write("• Horse Racing")
+            st.write("• Betting")
+        
+        with col2:
+            st.write("**Sub Topics:**")
+            st.write("• Brand names (Betway, SportyBet)")
+            st.write("• Sports (Football, Basketball)")
+            st.write("• Games (Aviator, PowerBall)")
+            st.write("• Categories (Live Casino)")
+            st.write("• General")
+        
+        with col3:
+            st.write("**Modifiers (Intent):**")
+            st.write("• Registration/Login")
+            st.write("• App/Download")
+            st.write("• Tips/Predictions")
+            st.write("• Results/Live")
+            st.write("• Ghana/Regional")
+            st.write("• General")
+    else:
+        st.write("**Legacy Format:**")
+        st.warning("⚠️ Legacy format only trains basic intent classification, not the full semantic analyzer.")
+        
+        sample_training_data = pd.DataFrame({
+            'keyword': ['betway register bonus', 'football betting tips', 'odds comparison'],
+            'intent': ['transactional', 'informational', 'commercial']
+        })
+        st.dataframe(sample_training_data, use_container_width=True)
     
     if training_file is not None:
         try:
@@ -239,35 +289,78 @@ with train_tab1:
             train_df = pd.read_csv(training_file)
             st.success(f"✅ **Training file loaded!** Found {len(train_df)} labeled keywords")
             
-            # Validate required columns
-            required_cols = ['keyword', 'intent']
+            # Determine format and validate columns
+            if format_option == "Enhanced (Main/Sub/Modifier)":
+                required_cols = ['keyword', 'main_topic', 'sub_topic', 'modifier']
+                format_type = "enhanced"
+            else:
+                required_cols = ['keyword', 'intent']
+                format_type = "legacy"
+            
             missing_cols = [col for col in required_cols if col not in train_df.columns]
             
             if missing_cols:
                 st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+                st.write(f"**Found columns:** {', '.join(train_df.columns)}")
             else:
                 # Show preview
                 st.write("**Preview of uploaded training data:**")
                 st.dataframe(train_df.head(10), use_container_width=True)
                 
-                # Show intent distribution
-                intent_counts = train_df['intent'].value_counts()
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write("**Intent Distribution:**")
-                    for intent, count in intent_counts.items():
-                        st.write(f"• {intent}: {count} keywords")
-                
-                with col2:
-                    st.write("**Keywords by Intent:**")
-                    total_keywords = len(train_df)
-                    for intent, count in intent_counts.items():
-                        percentage = (count / total_keywords) * 100
-                        st.progress(percentage / 100, text=f"{intent}: {percentage:.1f}%")
+                # Show distribution based on format
+                if format_type == "enhanced":
+                    # Show enhanced statistics
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        main_counts = train_df['main_topic'].value_counts()
+                        st.write("**Main Topics:**")
+                        for topic, count in main_counts.items():
+                            st.write(f"• {topic}: {count}")
+                    
+                    with col2:
+                        sub_counts = train_df['sub_topic'].value_counts()
+                        st.write("**Sub Topics:**")
+                        for topic, count in sub_counts.head(5).items():
+                            st.write(f"• {topic}: {count}")
+                        if len(sub_counts) > 5:
+                            st.write(f"... and {len(sub_counts) - 5} more")
+                    
+                    with col3:
+                        mod_counts = train_df['modifier'].value_counts()
+                        st.write("**Modifiers:**")
+                        for mod, count in mod_counts.head(5).items():
+                            st.write(f"• {mod}: {count}")
+                        if len(mod_counts) > 5:
+                            st.write(f"... and {len(mod_counts) - 5} more")
+                    
+                    # Show semantic analysis capabilities
+                    st.info(f"🧠 **This training data will teach the semantic analyzer:**\n"
+                           f"• {len(main_counts)} main topic categories\n"
+                           f"• {len(sub_counts)} sub-topic patterns (brands, games, etc.)\n"
+                           f"• {len(mod_counts)} intent modifiers\n"
+                           f"• Advanced pattern recognition from {len(train_df)} keyword examples")
+                    
+                else:
+                    # Show legacy statistics
+                    intent_counts = train_df['intent'].value_counts()
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write("**Intent Distribution:**")
+                        for intent, count in intent_counts.items():
+                            st.write(f"• {intent}: {count} keywords")
+                    
+                    with col2:
+                        st.write("**Keywords by Intent:**")
+                        total_keywords = len(train_df)
+                        for intent, count in intent_counts.items():
+                            percentage = (count / total_keywords) * 100
+                            st.progress(percentage / 100, text=f"{intent}: {percentage:.1f}%")
                 
                 # Add to training data button
-                if st.button("📚 Add to Training Data", type="primary", key="add_training"):
+                button_text = "🚀 Add Enhanced Training Data" if format_type == "enhanced" else "📚 Add Legacy Training Data"
+                if st.button(button_text, type="primary", key="add_training"):
                     try:
                         # Import the retraining script function
                         import sys
@@ -292,14 +385,44 @@ with train_tab1:
                         # Save updated training data
                         combined_data.to_csv(DEFAULT_TRAINING_PATH, index=False)
                         
-                        st.success(f"🎉 **Training data updated!** Added {len(train_df)} new keywords. Total training data now contains {len(combined_data)} keywords.")
+                        # Show success message based on format
+                        if format_type == "enhanced":
+                            st.success(f"🎉 **Enhanced training data added!** The vector-based semantic model will learn from {len(train_df)} new examples. Total training data: {len(combined_data)} keywords.")
+                            
+                            # Trigger immediate retraining for enhanced data
+                            with st.spinner("🧠 Training vector-based semantic model..."):
+                                from scripts.weekly_retrain import train_vector_semantic_model
+                                vector_results = train_vector_semantic_model(combined_data)
+                                
+                                if vector_results.get('vector_training_status') == 'success':
+                                    st.success("✅ **Vector semantic model trained successfully!**")
+                                    
+                                    col_acc1, col_acc2, col_acc3 = st.columns(3)
+                                    with col_acc1:
+                                        st.metric("Main Topic Accuracy", f"{vector_results.get('main_accuracy', 0):.1%}")
+                                    with col_acc2:
+                                        st.metric("Sub Topic Accuracy", f"{vector_results.get('sub_accuracy', 0):.1%}")
+                                    with col_acc3:
+                                        st.metric("Modifier Accuracy", f"{vector_results.get('modifier_accuracy', 0):.1%}")
+                                    
+                                    st.write(f"**Learned:** {vector_results.get('learned_brands', 0)} brands, {vector_results.get('learned_patterns', 0)} patterns")
+                                
+                        else:
+                            st.success(f"🎉 **Legacy training data updated!** Added {len(train_df)} new keywords. Total training data: {len(combined_data)} keywords.")
                         
                         # Show updated stats
-                        new_intent_counts = combined_data['intent'].value_counts()
-                        st.write("**Updated training data distribution:**")
-                        for intent, count in new_intent_counts.items():
-                            st.write(f"• {intent}: {count} keywords")
-                            
+                        if format_type == "enhanced":
+                            st.write("**Updated semantic training capabilities:**")
+                            main_counts = combined_data['main_topic'].value_counts()
+                            st.write("**Main Topics:**")
+                            for topic, count in main_counts.items():
+                                st.write(f"• {topic}: {count} examples")
+                        else:
+                            new_intent_counts = combined_data['intent'].value_counts() if 'intent' in combined_data.columns else {}
+                            st.write("**Updated training data distribution:**")
+                            for intent, count in new_intent_counts.items():
+                                st.write(f"• {intent}: {count}")
+                                
                     except Exception as e:
                         st.error(f"❌ Error adding training data: {str(e)}")
                         
