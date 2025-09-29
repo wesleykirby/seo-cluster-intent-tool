@@ -382,7 +382,12 @@ class SemanticKeywordAnalyzer:
         """Group semantically similar keywords using ML"""
         if not keywords:
             return {}
-            
+
+        # Small groups don't benefit from TF-IDF/KMeans; keep their original order
+        min_cluster_size = 5
+        if len(keywords) < min_cluster_size:
+            return {0: list(keywords)}
+
         # Use word-level TF-IDF for better semantic understanding
         vectorizer = TfidfVectorizer(
             analyzer='word',
@@ -410,8 +415,9 @@ class SemanticKeywordAnalyzer:
                 if cluster_id not in cluster_groups:
                     cluster_groups[cluster_id] = []
                 cluster_groups[cluster_id].append(keywords[idx])
-                
-            return cluster_groups
+
+            # Ensure deterministic ordering by cluster label
+            return dict(sorted(cluster_groups.items()))
         
         except Exception as e:
             # Fallback: simple grouping
@@ -535,7 +541,7 @@ class SemanticKeywordAnalyzer:
             # Use semantic clustering for this group
             clusters = self.semantic_clustering(group_keywords)
             
-            for cluster_keywords in clusters.values():
+            for _, cluster_keywords in clusters.items():
                 cluster_map.update({kw: cluster_id for kw in cluster_keywords})
                 cluster_id += 1
         
@@ -670,7 +676,7 @@ class SemanticKeywordAnalyzer:
             group_keywords = group_df['Keyword'].tolist()
             clusters = self.semantic_clustering(group_keywords)
             
-            for cluster_keywords in clusters.values():
+            for _, cluster_keywords in clusters.items():
                 for kw in cluster_keywords:
                     cluster_map[kw] = cluster_id
                 cluster_id += 1
