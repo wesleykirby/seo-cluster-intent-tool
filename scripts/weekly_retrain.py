@@ -23,7 +23,11 @@ from cluster.active_learning import DEFAULT_QUEUE_PATH, load_label_queue
 from cluster.pipeline import normalize_kw
 from cluster.vector_semantic_learner import VectorSemanticLearner
 
-DEFAULT_TRAINING_PATH = Path("data/training_data.csv")
+# Always resolve the canonical training data relative to the project root so
+# uploads performed from other working directories (for example when the
+# Streamlit app is launched via an absolute path) still persist to the
+# repository copy of the CSV.
+DEFAULT_TRAINING_PATH = ROOT / "data" / "training_data.csv"
 
 
 def _ensure_keyword_norm(df: pd.DataFrame) -> pd.DataFrame:
