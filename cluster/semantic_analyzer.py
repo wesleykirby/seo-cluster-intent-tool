@@ -3,7 +3,7 @@ Smart semantic keyword analysis for generating Main/Sub/Modifier/Keyword structu
 Uses ML pattern recognition and fuzzy matching to discover intent patterns even from misspelled keywords.
 """
 import re
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Tuple, Set, Optional
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
@@ -94,40 +94,56 @@ class SemanticKeywordAnalyzer:
         except Exception as e:
             print(f"[SemanticAnalyzer] Warning: Could not load learned patterns: {e}")
     
-    def _get_vector_prediction(self, keyword: str) -> Dict:
-        """
-        Get prediction from vector-based semantic learner.
-        Returns enhanced prediction with confidence scores.
-        """
+    def _get_vector_predictions(self, keywords: List[str]) -> List[Optional[Dict]]:
+        """Batch prediction helper returning enriched vector predictions per keyword."""
+        results: List[Optional[Dict]] = [None] * len(keywords)
+
+        if not keywords:
+            return results
+
         try:
-            predictions = self.vector_learner.predict([keyword])
-            if predictions:
-                prediction = predictions[0]
-                
-                # Enhance with pattern-based insights
-                enhancements = self.vector_learner.enhance_with_patterns(keyword)
-                
-                # Combine vector prediction with pattern enhancements
-                result = {
-                    'main_topic': prediction['main_topic'],
-                    'sub_topic': prediction['sub_topic'], 
-                    'modifier': prediction['modifier'],
-                    'confidence': prediction['confidence'],
-                    'vector_based': True,
-                    'brand_detected': enhancements.get('brand_detected'),
-                    'pattern_matches': enhancements.get('pattern_matches', []),
-                    'confidence_boost': enhancements.get('confidence_boost', 0.0)
-                }
-                
-                # Boost confidence if we have pattern matches
-                result['confidence'] = min(1.0, result['confidence'] + result['confidence_boost'])
-                
-                return result
-                
+            predictions = self.vector_learner.predict(keywords)
         except Exception as e:
-            print(f"[SemanticAnalyzer] Warning: Vector prediction failed for '{keyword}': {e}")
-        
-        return None
+            print(f"[SemanticAnalyzer] Warning: Vector batch prediction failed: {e}")
+            return results
+
+        for idx, keyword in enumerate(keywords):
+            try:
+                prediction = predictions[idx] if predictions and idx < len(predictions) else None
+            except Exception as e:
+                print(f"[SemanticAnalyzer] Warning: Vector prediction indexing failed for '{keyword}': {e}")
+                prediction = None
+
+            if not prediction:
+                continue
+
+            enhancements = {}
+            try:
+                enhancements = self.vector_learner.enhance_with_patterns(keyword) or {}
+            except Exception as e:
+                print(f"[SemanticAnalyzer] Warning: Pattern enhancement failed for '{keyword}': {e}")
+
+            result = {
+                'main_topic': prediction.get('main_topic'),
+                'sub_topic': prediction.get('sub_topic'),
+                'modifier': prediction.get('modifier'),
+                'confidence': prediction.get('confidence', 0.0),
+                'vector_based': True,
+                'brand_detected': enhancements.get('brand_detected'),
+                'pattern_matches': enhancements.get('pattern_matches', []),
+                'confidence_boost': enhancements.get('confidence_boost', 0.0)
+            }
+
+            # Boost confidence if we have pattern matches
+            result['confidence'] = min(1.0, result['confidence'] + result['confidence_boost'])
+
+            results[idx] = result
+
+        return results
+
+    def _get_vector_prediction(self, keyword: str) -> Optional[Dict]:
+        """Compatibility wrapper returning the first prediction from the batch helper."""
+        return self._get_vector_predictions([keyword])[0]
     
     def load_slots_games(self):
         """Load slots games from the training data for enhanced recognition"""
@@ -431,11 +447,13 @@ class SemanticKeywordAnalyzer:
         results = []
         vector_used_count = 0
         
-        for keyword in keywords:
+        vector_predictions = self._get_vector_predictions(keywords)
+
+        for idx, keyword in enumerate(keywords):
             try:
                 # ⭐ FIRST: Try vector-based prediction (the new ML-powered approach)
-                vector_prediction = self._get_vector_prediction(keyword)
-                
+                vector_prediction = vector_predictions[idx] if idx < len(vector_predictions) else None
+
                 if vector_prediction and vector_prediction['confidence'] >= 0.6:  # High confidence threshold
                     # Use vector-based prediction - this is the new ML learning!
                     results.append({
